@@ -1,0 +1,96 @@
+#!/bin/sh
+# configure script for bsdsum
+# (c) 2022-2023, Nicolas Provost <dev AT npsoft DOT fr>
+# BSD license (see file COPYING)
+
+
+echo "bsdsum configure script"
+echo "-----------------------"
+
+OS=$(uname -s)
+VER=$(cat version)
+C_FLAGS="-Iinclude -Ilibcrypto -fstack-protector"
+PREFIX=/usr/local
+CC=
+OPTS=-O2
+
+help()
+{
+	echo "arguments:"
+	echo "  --prefix=    set prefix (default /usr/local)"
+	echo "  --cc=        set compiler (gcc, clang..)"
+	echo
+}
+
+rm -f config.mk 
+if test -z "$(which clang)"
+then
+	CC=gcc
+else
+	CC=clang
+fi
+
+rm -f include/os_endian.h
+
+case "${OS}" in
+	*linux*|*Linux*)
+		OS=LINUX
+		ln -s /usr/include/endian.h include/os_endian.h
+		;;
+	NetBSD|OpenBSD|FreeBSD|DragonFly)
+		ln -s /usr/include/sys/endian.h include/os_endian.h
+		OS=BSD
+		;;
+	*)
+		echo "OS not supported"
+		exit 1
+		;;
+esac
+
+for A in $@
+do
+	case "${A}" in
+	help)
+		help
+		;;
+	--prefix=*)
+		PREFIX=${A#--prefix=}
+		;;
+	--cc=*)
+		CC=${A#--cc=}
+		;;
+	*)
+		echo "unknown argument ${A}"
+		exit 1
+		;;
+	esac
+done
+
+TEST=$($CC --version 2>/dev/null)
+if test -z "$TEST"
+then
+	echo "no C compiler found"
+	exit 1
+fi
+
+echo "- os is ${OS}"
+echo "- prefix is ${PREFIX}"
+echo "- compiler is ${CC}"
+echo
+echo "use 'make' to build out/bsdsum and run tests"
+echo "use 'make static' to build the static version out/bsdsum-static"
+echo "use 'make install [DESTDIR=] ' to install bsdsum"
+echo "use 'make check' to run tests"
+echo
+
+echo "OS := ${OS}" > config.mk
+echo "VER := ${VER}" >> config.mk
+echo "CC := ${CC}" >> config.mk
+echo "C_FLAGS := ${C_FLAGS}" >> config.mk
+echo "OPTS := ${OPTS}" >> config.mk
+echo "PREFIX := ${PREFIX}" >> config.mk
+
+find . -name '*.o' -delete
+mkdir -p out
+rm -f out/*.o out/bsdsum out/bsdsum-static
+

@@ -1,0 +1,28 @@
+bsdsum
+======
+
+2022/12, 2023/01 - v1.4
+* add split digest
+* add binary style
+* add configure script
+* rewrite filelist parser
+* add gcc or clang support
+* add tests
+* fix BSD support
+
+2022/12/18 - v1.3
+* use mmap to access content of files
+* add -f (offset) and -l (length) options
+
+2022/12/17 - v1.2
+* add SHA3-256 and SHA3-512 support
+* add again auto-test option [-t]
+* add -s STYLE option
+* change -h to help and old -h to -o
+* change various options and flags
+
+2022/12/11 - v1.1
+* add libcrypto files from libressl
+* add -g option (GNU output format)
+* remove some options
+

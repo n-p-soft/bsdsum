@@ -1,0 +1,4 @@
+out/
+*.o
+include/os_endian.h
+config.mk
