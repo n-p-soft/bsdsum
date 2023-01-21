@@ -1,4 +1,5 @@
 out/
 *.o
+*.gz
 include/os_endian.h
 config.mk

@@ -1,11 +1,29 @@
 # bsdsum
 # (c) Nicolas Provost, 2022-2023 <dev AT npsoft DOT fr>
 # License: BSD (see file COPYING)
-# Version 1.0 20220302
-# Version 1.1 20221210
-# Version 1.2 20221217
-# Version 1.3 20221218
-# Version 1.4 01/2023
+
+.SUFFIXES: .o .c
+
+all: out/bsdsum 
+
+
+ARC := ChangeLog configure COPYING doc include libcrypto Makefile README.md
+ARC += releases src tests TODO version
+
+.PHONY: targz
+targz: out/bsdsum
+	@echo "building out/bsdsum-$(VER).tar.gz"; \
+		rm -Rf out/bsdsum-$(VER); \
+		mkdir -p out/bsdsum-$(VER); \
+		cp -aR $(ARC) out/bsdsum-$(VER); \
+		cd out; \
+		find bsdsum-$(VER) -name '*.o' -delete; \
+		tar cfz bsdsum-$(VER).tar.gz bsdsum-$(VER) || exit 1; \
+		rm -Rf bsdsum-$(VER); \
+		./bsdsum -a sha384 -s base64 -o bsdsum-$(VER).tar.gz.dg \
+			bsdsum-$(VER).tar.gz; \
+		cat bsdsum-$(VER).tar.gz.dg
+
 
 include config.mk
 
@@ -22,9 +40,8 @@ CFLAGS := $(C_FLAGS) $(DEFS)
 
 DESTDIR ?= 
 
-.SUFFIXES: .o .c
-
-all: out/bsdsum 
+config.mk:
+	@ ./configure || exit 1
 
 static: out/bsdsum-static
 
@@ -34,12 +51,12 @@ src/bsdsum.o: src/bsdsum.c
 .c.o:
 	$(CC) -c -o $@ $(CFLAGS) $(OPTS) $<
 
-out/bsdsum: $(OBJS)
+out/bsdsum: config.mk $(OBJS)
 	@mkdir -p out
 	@$(CC) -o out/bsdsum $(CFLAGS) $(OBJS) && \
 		echo "bsdsum compiled."	
 
-out/bsdsum-static: $(OBJS)
+out/bsdsum-static: config.mk $(OBJS)
 	@mkdir -p out
 	@$(CC) -static -o out/bsdsum-static $(CFLAGS) $(OBJS) && \
 		echo "bsdsum-static compiled."	
@@ -64,9 +81,4 @@ check: out/bsdsum
 	@out/bsdsum -t || exit 1
 	@echo "FILELIST1"; cd tests; ../out/bsdsum -c sums || exit 1
 	@echo "FILELIST2"; cd tests; ../out/bsdsum -c sums0 || exit 1
-
-.PHONY: targz
-targz: distclean
-	@F=$$(pwd); cd ..; \
-		tar cfz bsdsum-$(VER).tar.gz $$(basename $$F) || exit 1; 
 
