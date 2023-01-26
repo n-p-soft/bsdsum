@@ -57,7 +57,7 @@ static const char sym_set[] =
 
 static const char Pad64 = '=';
 
-const char *b64_set(bsdsum_enc64_t enc)
+static const char *b64_set(bsdsum_enc64_t enc)
 {
 	switch(enc) {
 		case ENC64_SYM:
@@ -132,13 +132,13 @@ const char *b64_set(bsdsum_enc64_t enc)
 	   characters followed by one "=" padding character.
    */
 
-int b64_ntop(u_char const *src, size_t srclength, 
-		char *target, size_t targsize,
-		bsdsum_enc64_t enc)
+int bsdsum_b64_ntop (unsigned char const *src, size_t srclength, 
+			char *target, size_t targsize,
+			bsdsum_enc64_t enc)
 {
 	size_t datalength = 0;
-	u_char input[3];
-	u_char output[4];
+	unsigned char input[3];
+	unsigned char output[4];
 	int i;
 	const char *set = b64_set(enc);
 
@@ -193,11 +193,11 @@ int b64_ntop(u_char const *src, size_t srclength,
    src from base - 64 numbers into three 8 bit bytes in the target area.
    it returns the number of data bytes stored at the target, or -1 on error.
  */
-int b64_pton(char const *src, u_char *target, size_t targsize,
-		bsdsum_enc64_t enc)
+int bsdsum_b64_pton (char const *src, unsigned char *target, 
+			size_t targsize, bsdsum_enc64_t enc)
 {
 	int tarindex, state, ch;
-	u_char nextbyte;
+	unsigned char nextbyte;
 	char *pos;
 	const char *set = b64_set(enc);
 

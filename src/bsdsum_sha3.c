@@ -18,7 +18,7 @@
  */
 
 #include <string.h>
-#include "sha3.h"
+#include "bsdsum_sha3.h"
 
 /*===========================================================================
   = ORIGINAL KECCAK REFERENCE CODE                                          =
@@ -616,13 +616,13 @@ Final (hashState * state, BitSequence * hashval)
   ===========================================================================*/
 /** initialize a SHA3 context.
  *
- * @param[in] ctx (sha3_ctx_t*) context.
+ * @param[in] ctx (bsdsum_sha3_ctx_t*) context.
  * @param[in] sz (size_t) size of digest in bytes (32 or 64).
  * @return (bool) boolean result of operation.
  * @exception EINVAL bad input parameter.
  * @version 1.0
  */
-static bool sha3_begin (sha3_ctx_t * ctx, size_t sz)
+static bool bsdsum_sha3_begin (bsdsum_sha3_ctx_t * ctx, size_t sz)
 {
     if (((sz != 32) && (sz != 64)) || (Init (&ctx->state, sz * 8) != SUCCESS))
           return false;
@@ -631,27 +631,27 @@ static bool sha3_begin (sha3_ctx_t * ctx, size_t sz)
     return true;
 }
 
-void sha3_256_begin (sha3_ctx_t * ctx)
+void bsdsum_sha3_256_begin (bsdsum_sha3_ctx_t * ctx)
 {
-    sha3_begin (ctx, 32);
+    bsdsum_sha3_begin (ctx, 32);
 }
 
-void sha3_512_begin (sha3_ctx_t * ctx)
+void bsdsum_sha3_512_begin (bsdsum_sha3_ctx_t * ctx)
 {
-    sha3_begin (ctx, 64);
+    bsdsum_sha3_begin (ctx, 64);
 }
 
 /** update a SHA3 context.
  *
- * @param[in] ctx (sha3_ctx_t*) SHA3 context (started).
+ * @param[in] ctx (bsdsum_sha3_ctx_t*) SHA3 context (started).
  * @param[in] input (unsigned char*) input data.
  * @param[in] inputLen (size_t) input data length.
  * @return (bool) boolean result of operation.
  * @exception EINVAL bad input parameter.
  * @version 1.0
  */
-bool sha3_update (sha3_ctx_t * ctx,
-                  const unsigned char *data, size_t len)
+bool bsdsum_sha3_update (bsdsum_sha3_ctx_t * ctx,
+     		             const unsigned char *data, size_t len)
 {
     if ( ! ctx->initialized)
         return false;
@@ -660,13 +660,13 @@ bool sha3_update (sha3_ctx_t * ctx,
 
 /** end SHA3 digest and output hash.
  *
- * @param[in] ctx (sha3_ctx_t*) SHA3 context.
- * @param[in] digest (sha3_hash*) where to store digest.
+ * @param[in] ctx (bsdsum_sha3_ctx_t*) SHA3 context.
+ * @param[in] digest (bsdsum_sha3_hash_t*) where to store digest.
  * @return (bool) boolean result of operation.
  * @exception EINVAL bad input parameter.
  * @version 1.0
  */
-static bool sha3_end (sha3_ctx_t * ctx, sha3_hash * digest)
+static bool bsdsum_sha3_end (bsdsum_sha3_ctx_t * ctx, bsdsum_sha3_hash_t * digest)
 {
     unsigned char *output;
 
@@ -681,10 +681,10 @@ static bool sha3_end (sha3_ctx_t * ctx, sha3_hash * digest)
     return (Final (&ctx->state, output) == SUCCESS);
 }
 
-void sha3_final (unsigned char *dg, sha3_ctx_t *ctx)
+void bsdsum_sha3_final (unsigned char *dg, bsdsum_sha3_ctx_t *ctx)
 {
-    sha3_hash h = { 0 };
-    sha3_end (ctx, &h);
+    bsdsum_sha3_hash_t h = { 0 };
+    bsdsum_sha3_end (ctx, &h);
     if (ctx->len == 32)
         memcpy (dg, h.dg256, 32);
     else

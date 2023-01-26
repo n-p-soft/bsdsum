@@ -28,7 +28,7 @@
 #include <stdio.h>
 #include "sha/sha.h"
 #include "md5/md5.h"
-#include "sha3.h"
+#include "bsdsum_sha3.h"
 #include "whirlpool.h"
 
 /* output styles */
@@ -95,7 +95,7 @@ typedef union bsdsum_ctx {
 	SHA_CTX sha1;
 	SHA256_CTX sha256;
 	SHA512_CTX sha512;
-	sha3_ctx_t sha3;
+	bsdsum_sha3_ctx_t sha3;
 	whirlpool_ctx whirlpool;
 	size_t size;
 } bsdsum_ctx_t;
@@ -122,22 +122,23 @@ typedef struct {
 
 void explicit_bzero(void* p, size_t sz);
 
-void size_init (bsdsum_ctx_t *ctx);
+void bsdsum_size_init (bsdsum_ctx_t *ctx);
 
-void size_update (bsdsum_ctx_t * ctx,
-                  const unsigned char *data, size_t len);
+void bsdsum_size_update (bsdsum_ctx_t * ctx,
+     		             const unsigned char *data, size_t len);
 
-void size_final (unsigned char *dg, bsdsum_ctx_t *ctx);
+void bsdsum_size_final (unsigned char *dg, bsdsum_ctx_t *ctx);
 
-int b64_ntop(const u_char *src, size_t srclength, 
-		char *target, size_t targsize,
-		bsdsum_enc64_t enc);
+int bsdsum_b64_ntop(const unsigned char *src, size_t srclength, 
+			char *target, size_t targsize,
+			bsdsum_enc64_t enc);
 
-void bsdsum_init(bsdsum_t *bs);
+bsdsum_op_t* bsdsum_op_get(const char* name);
 
-bsdsum_op_t* bsdsum_get_func(const char* name);
+bsdsum_op_t* bsdsum_op_find_alg(const char *cp, int base64, int quiet);
 
-bsdsum_op_t* bsdsum_find_alg(const char *cp, int base64, int quiet);
+bsdsum_style_t bsdsum_op_parse(char *line, char **filename, char **dg,
+				bsdsum_op_t **hf);
 
 int bsdsum_digest_run (bsdsum_op_t *hf,
 			unsigned char* buf, long length, int split);
@@ -148,17 +149,16 @@ void bsdsum_digest_end(bsdsum_op_t *);
 
 int  bsdsum_digest_file(bsdsum_t*, const char *, int);
 
-void bsdsum_digest_print(FILE*, const bsdsum_op_t *, 
+void bsdsum_digest_print(int, const bsdsum_op_t *, 
 				const char *);
-
-bsdsum_style_t bsdsum_parse(char *line, char **filename, char **dg,
-				bsdsum_op_t **hf);
 
 int bsdsum_digest_filelist(bsdsum_t*, const char *, bsdsum_op_t *, 
 				int, char **);
 
-void bsdsum_usage(void) __attribute__((__noreturn__));
+void bsdsum_help(void);
 
 void bsdsum_autotest(void);
+
+char* bsdsum_getline(int fd, int* eof, const char *filename);
 
 #endif

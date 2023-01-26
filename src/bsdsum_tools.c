@@ -14,26 +14,53 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
+ * The original Keccak reference code below is public-domain.
  */
 
 #include <stdlib.h>
-#include <stdio.h>
+#include <err.h>
 #include "bsdsum.h"
 
-void size_init (bsdsum_ctx_t *ctx)
+void explicit_bzero(void* p, size_t sz)
 {
-    ctx->size = 0;
-}
+	unsigned char* q = p;
+	size_t i;
 
-void size_update (bsdsum_ctx_t * ctx,
-                  const unsigned char *data, size_t len)
-{
-    ctx->size += len;
-}
-
-void size_final (unsigned char *dg, bsdsum_ctx_t *ctx)
-{
-	sprintf ((char*) dg, "%zu", ctx->size);
+	if ( ! p)
+		return;
+	for (i = 0; i < sz; i++)
+		*q++ = 0;
 }
 
 
+/* read a line, max 1KB. Returns NULL only on error. */
+char* bsdsum_getline(int fd, int* eof, const char *filename)
+{
+	const int max = 1024;
+	char *l = calloc(1, max);
+	int n;
+	char c;
+
+	if (l == NULL)
+		errx(1, "out of memory");
+	*eof = 0;
+	for (n = 0; n < max; n++) {
+		switch (read(fd, &c, 1)) {
+		case 0:
+			*eof = 1;
+			return l;
+		case 1:
+			l[n] = c;
+			if (c == '\n')
+				return l;
+			break;
+		default:
+			warnx("I/O error reading %s", filename);
+			free(l);
+			return NULL;
+		}
+	}
+	free(l);
+	warnx("line too long in %s", filename);
+	return NULL;
+}

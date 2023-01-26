@@ -6,8 +6,8 @@
  * All rights reserved.
  */
 
-#ifndef __SHA3_H
-#define __SHA3_H
+#ifndef __BSDSUM_SHA3_H
+#define __BSDSUM_SHA3_H
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -59,13 +59,13 @@ typedef union
 {
     sha3_256_hash dg256;
     sha3_512_hash dg512;
-} sha3_hash;
+} bsdsum_sha3_hash_t;
 
 #define SHA3_256_BLOCK_SIZE (1088/8)
 #define SHA3_512_BLOCK_SIZE (576/8)
 #define SHA3_BUF_LEN 144
 
-typedef struct sha3_ctx_t
+typedef struct bsdsum_sha3_ctx_t
 {
     spongeState state;
     size_t len;                   /**< size of output (32 or 64) */
@@ -81,13 +81,17 @@ typedef struct sha3_ctx_t
         unsigned char s256[SHA3_256_BLOCK_SIZE + 32];
         unsigned char s512[SHA3_512_BLOCK_SIZE + 64];
     } opad;     /**< HMAC outer padding */
-} sha3_ctx_t;
+} bsdsum_sha3_ctx_t;
 
-void sha3_256_begin (sha3_ctx_t *cx);
-void sha3_512_begin (sha3_ctx_t *cx);
-bool sha3_update (sha3_ctx_t *cx,
-                  const unsigned char *input, size_t inputLen);
-void sha3_final (unsigned char *dg, sha3_ctx_t *cx);
+void bsdsum_sha3_256_begin (bsdsum_sha3_ctx_t *cx);
+
+void bsdsum_sha3_512_begin (bsdsum_sha3_ctx_t *cx);
+
+bool bsdsum_sha3_update (bsdsum_sha3_ctx_t *cx,
+     	             const unsigned char *input, size_t inputLen);
+
+void bsdsum_sha3_final (unsigned char *dg, bsdsum_sha3_ctx_t *cx);
 
 
 #endif
+

@@ -27,8 +27,15 @@ targz: out/bsdsum
 
 include config.mk
 
-OBJS := src/base64.o src/bsdsum.o src/test.o \
-	src/sha3.o src/size.o \
+OBJS := src/bsdsum_b64.o \
+	src/bsdsum.o \
+	src/bsdsum_op.o \
+	src/bsdsum_test.o \
+	src/bsdsum_sha3.o \
+	src/bsdsum_size.o \
+	src/bsdsum_help.o \
+	src/bsdsum_tools.o \
+	src/bsdsum_digest.o \
 	external/libcrypto/sha/sha256.o \
 	external/libcrypto/sha/sha1dgst.o \
 	external/libcrypto/sha/sha512.o \

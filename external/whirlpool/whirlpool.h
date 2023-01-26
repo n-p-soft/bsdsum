@@ -3,10 +3,6 @@
 #define WHIRLPOOL_H
 #include "ustd.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #define whirlpool_block_size 64
 
 /* algorithm context */
@@ -28,9 +24,5 @@ typedef struct whirlpool_ctx
 void rhash_whirlpool_init(whirlpool_ctx* ctx);
 void rhash_whirlpool_update(whirlpool_ctx* ctx, const unsigned char* msg, size_t size);
 void rhash_whirlpool_final(unsigned char* result, whirlpool_ctx* ctx);
-
-#ifdef __cplusplus
-} /* extern "C" */
-#endif /* __cplusplus */
 
 #endif /* WHIRLPOOL_H */
