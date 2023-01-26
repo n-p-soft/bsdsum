@@ -126,7 +126,7 @@ void blake224_process( blake224_ctx *S, const uint8_t *in, uint64_t inlen )
 }
 
 
-void blake224_final( blake224_ctx *S, uint8_t *out )
+void blake224_end( blake224_ctx *S, uint8_t *out )
 {
   uint8_t msglen[8], zz = 0x00, oz = 0x80;
   uint32_t lo = S->t[0] + ( S->buflen << 3 ), hi = S->t[1];
@@ -181,11 +181,11 @@ void blake224_hash( uint8_t *out, const uint8_t *in, uint64_t inlen )
   blake224_ctx S;
   blake224_init( &S );
   blake224_process( &S, in, inlen );
-  blake224_final( &S, out );
+  blake224_end( &S, out );
 }
 
 
-void blake224_test()
+int blake224_test()
 {
   int i, v;
   uint8_t in[72], out[28];
@@ -215,7 +215,6 @@ void blake224_test()
   if ( v ) printf( "test 1 error\n" );
 
   blake224_hash( out, in, 72 );
-  v = 0;
 
   for( i = 0; i < 28; ++i )
   {
@@ -223,6 +222,7 @@ void blake224_test()
   }
 
   if ( v ) printf( "test 2 error\n" );
+  return v;
 }
 
 void blake256_compress( blake256_ctx *S, const uint8_t *block )
@@ -338,7 +338,7 @@ void blake256_process( blake256_ctx *S, const uint8_t *in, uint64_t inlen )
 }
 
 
-void blake256_final( blake256_ctx *S, uint8_t *out )
+void blake256_end( blake256_ctx *S, uint8_t *out )
 {
   uint8_t msglen[8], zo = 0x01, oo = 0x81;
   uint32_t lo = S->t[0] + ( S->buflen << 3 ), hi = S->t[1];
@@ -394,11 +394,11 @@ void blake256_hash( uint8_t *out, const uint8_t *in, uint64_t inlen )
   blake256_ctx S;
   blake256_init( &S );
   blake256_process( &S, in, inlen );
-  blake256_final( &S, out );
+  blake256_end( &S, out );
 }
 
 
-void blake256_test()
+int blake256_test()
 {
   int i, v;
   uint8_t in[72], out[32];
@@ -428,7 +428,6 @@ void blake256_test()
   if ( v ) printf( "test 1 error\n" );
 
   blake256_hash( out, in, 72 );
-  v = 0;
 
   for( i = 0; i < 32; ++i )
   {
@@ -436,6 +435,7 @@ void blake256_test()
   }
 
   if ( v ) printf( "test 2 error\n" );
+  return v;
 }
 
 void blake384_compress( blake384_ctx *S, const uint8_t *block )
@@ -551,7 +551,7 @@ void blake384_process( blake384_ctx *S, const uint8_t *in, uint64_t inlen )
 }
 
 
-void blake384_final( blake384_ctx *S, uint8_t *out )
+void blake384_end( blake384_ctx *S, uint8_t *out )
 {
   uint8_t msglen[16], zz = 0x00, oz = 0x80;
   uint64_t lo = S->t[0] + ( S->buflen << 3 ), hi = S->t[1];
@@ -605,11 +605,11 @@ void blake384_hash( uint8_t *out, const uint8_t *in, uint64_t inlen )
   blake384_ctx S;
   blake384_init( &S );
   blake384_process( &S, in, inlen );
-  blake384_final( &S, out );
+  blake384_end( &S, out );
 }
 
 
-void blake384_test()
+int blake384_test()
 {
   int i, v;
   uint8_t in[144], out[48];
@@ -637,7 +637,6 @@ void blake384_test()
   if ( v ) printf( "test 1 error\n" );
 
   blake384_hash( out, in, 144 );
-  v = 0;
 
   for( i = 0; i < 48; ++i )
   {
@@ -645,6 +644,7 @@ void blake384_test()
   }
 
   if ( v ) printf( "test 2 error\n" );
+  return v;
 }
 
 void blake512_compress( blake512_ctx *S, const uint8_t *block )
@@ -750,7 +750,7 @@ void blake512_process( blake512_ctx *S, const uint8_t *in, uint64_t inlen )
 }
 
 
-void blake512_final( blake512_ctx *S, uint8_t *out )
+void blake512_end( blake512_ctx *S, uint8_t *out )
 {
   uint8_t msglen[16], zo = 0x01, oo = 0x81;
   uint64_t lo = S->t[0] + ( S->buflen << 3 ), hi = S->t[1];
@@ -806,11 +806,11 @@ void blake512_hash( uint8_t *out, const uint8_t *in, uint64_t inlen )
   blake512_ctx S;
   blake512_init( &S );
   blake512_process( &S, in, inlen );
-  blake512_final( &S, out );
+  blake512_end( &S, out );
 }
 
 
-void blake512_test()
+int blake512_test()
 {
   int i, v;
   uint8_t in[144], out[64];
@@ -840,7 +840,6 @@ void blake512_test()
   if ( v ) printf( "test 1 error\n" );
 
   blake512_hash( out, in, 144 );
-  v = 0;
 
   for( i = 0; i < 64; ++i )
   {
@@ -848,5 +847,6 @@ void blake512_test()
   }
 
   if ( v ) printf( "test 2 error\n" );
+  return v;
 }
 

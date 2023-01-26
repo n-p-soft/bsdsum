@@ -51,7 +51,7 @@ typedef struct
 {
   uint64_t h[8], s[4], t[2];
   int buflen, nullt;
-  uint8_t buf[128];
+  uint8_t buf[128]; 
 } blake512_ctx;
 
 typedef blake512_ctx blake384_ctx;
@@ -119,7 +119,13 @@ static inline void blake224_update(blake224_ctx *S,
 {
 	blake224_process(S, buf, len);
 }
-void blake224_final(blake224_ctx *S, uint8_t *out);
+void blake224_end(blake224_ctx *S, uint8_t *out);
+static inline void blake224_final(unsigned char *out, blake224_ctx *S)
+{
+	blake224_end(S, out);
+}
+int blake224_test();
+
 void blake256_compress(blake256_ctx *S, const uint8_t *block);
 void blake256_init(blake256_ctx *S);
 void blake256_process(blake256_ctx *S, const uint8_t *in, uint64_t inlen);
@@ -129,7 +135,13 @@ static inline void blake256_update(blake256_ctx *S,
 {
 	blake256_process(S, buf, len);
 }
-void blake256_final(blake256_ctx *S, uint8_t *out);
+void blake256_end(blake256_ctx *S, uint8_t *out);
+static inline void blake256_final(unsigned char *out, blake256_ctx *S)
+{
+	blake256_end(S, out);
+}
+int blake256_test();
+
 void blake384_compress(blake384_ctx *S, const uint8_t *block);
 void blake384_init(blake384_ctx *S);
 void blake384_process(blake384_ctx *S, const uint8_t *in, uint64_t inlen);
@@ -139,7 +151,13 @@ static inline void blake384_update(blake384_ctx *S,
 {
 	blake384_process(S, buf, len);
 }
-void blake384_final(blake384_ctx *S, uint8_t *out);
+void blake384_end(blake384_ctx *S, uint8_t *out);
+static inline void blake384_final(unsigned char *out, blake384_ctx *S)
+{
+	blake384_end(S, out);
+}
+int blake384_test();
+
 void blake512_compress(blake512_ctx *S, const uint8_t *block);
 void blake512_init(blake512_ctx *S);
 void blake512_process(blake512_ctx *S, const uint8_t *in, uint64_t inlen);
@@ -149,7 +167,12 @@ static inline void blake512_update(blake512_ctx *S,
 {
 	blake512_process(S, buf, len);
 }
-void blake512_final(blake512_ctx *S, uint8_t *out);
+void blake512_end(blake512_ctx *S, uint8_t *out);
+static inline void blake512_final(unsigned char *out, blake512_ctx *S)
+{
+	blake512_end(S, out);
+}
+int blake512_test();
 
 #endif
 
