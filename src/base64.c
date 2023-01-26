@@ -42,6 +42,7 @@
  * IF IBM IS APPRISED OF THE POSSIBILITY OF SUCH DAMAGES.
  */
 
+#include "bsdsum.h"
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <ctype.h>
@@ -49,9 +50,24 @@
 #include <stdlib.h>
 #include <string.h>
 
-static const char Base64[] =
+static const char default_set[] =
 	"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+static const char sym_set[] =
+	"Ii0Aa1oYy2Bb3Ff4+g5K|k6L7Mm8Nn9!p<Qq>Rr$Ss@Tt;Vv.%WZ&z-?[]*G_/P^";
+
 static const char Pad64 = '=';
+
+const char *b64_set(bsdsum_enc64_t enc)
+{
+	switch(enc) {
+		case ENC64_SYM:
+			return sym_set;
+		case ENC64_DEFAULT:
+			return default_set;
+		default:
+			return NULL;
+	}
+}
 
 /* (From RFC1521 and draft-ietf-dnssec-secext-03.txt)
    The following encoding technique is taken from RFC 1521 by Borenstein
@@ -116,17 +132,15 @@ static const char Pad64 = '=';
 	   characters followed by one "=" padding character.
    */
 
-int
-b64_ntop(src, srclength, target, targsize)
-	u_char const *src;
-	size_t srclength;
-	char *target;
-	size_t targsize;
+int b64_ntop(u_char const *src, size_t srclength, 
+		char *target, size_t targsize,
+		bsdsum_enc64_t enc)
 {
 	size_t datalength = 0;
 	u_char input[3];
 	u_char output[4];
 	int i;
+	const char *set = b64_set(enc);
 
 	while (2 < srclength) {
 		input[0] = *src++;
@@ -141,10 +155,10 @@ b64_ntop(src, srclength, target, targsize)
 
 		if (datalength + 4 > targsize)
 			return (-1);
-		target[datalength++] = Base64[output[0]];
-		target[datalength++] = Base64[output[1]];
-		target[datalength++] = Base64[output[2]];
-		target[datalength++] = Base64[output[3]];
+		target[datalength++] = set[output[0]];
+		target[datalength++] = set[output[1]];
+		target[datalength++] = set[output[2]];
+		target[datalength++] = set[output[3]];
 	}
     
 	/* Now we worry about padding. */
@@ -160,12 +174,12 @@ b64_ntop(src, srclength, target, targsize)
 
 		if (datalength + 4 > targsize)
 			return (-1);
-		target[datalength++] = Base64[output[0]];
-		target[datalength++] = Base64[output[1]];
+		target[datalength++] = set[output[0]];
+		target[datalength++] = set[output[1]];
 		if (srclength == 1)
 			target[datalength++] = Pad64;
 		else
-			target[datalength++] = Base64[output[2]];
+			target[datalength++] = set[output[2]];
 		target[datalength++] = Pad64;
 	}
 	if (datalength >= targsize)
@@ -179,16 +193,13 @@ b64_ntop(src, srclength, target, targsize)
    src from base - 64 numbers into three 8 bit bytes in the target area.
    it returns the number of data bytes stored at the target, or -1 on error.
  */
-
-int
-b64_pton(src, target, targsize)
-	char const *src;
-	u_char *target;
-	size_t targsize;
+int b64_pton(char const *src, u_char *target, size_t targsize,
+		bsdsum_enc64_t enc)
 {
 	int tarindex, state, ch;
 	u_char nextbyte;
 	char *pos;
+	const char *set = b64_set(enc);
 
 	state = 0;
 	tarindex = 0;
@@ -200,7 +211,7 @@ b64_pton(src, target, targsize)
 		if (ch == Pad64)
 			break;
 
-		pos = strchr(Base64, ch);
+		pos = strchr(set, ch);
 		if (pos == 0) 		/* A non-base64 character. */
 			return (-1);
 
@@ -209,7 +220,7 @@ b64_pton(src, target, targsize)
 			if (target) {
 				if (tarindex >= targsize)
 					return (-1);
-				target[tarindex] = (pos - Base64) << 2;
+				target[tarindex] = (pos - set) << 2;
 			}
 			state = 1;
 			break;
@@ -217,8 +228,8 @@ b64_pton(src, target, targsize)
 			if (target) {
 				if (tarindex >= targsize)
 					return (-1);
-				target[tarindex]   |=  (pos - Base64) >> 4;
-				nextbyte = ((pos - Base64) & 0x0f) << 4;
+				target[tarindex]   |=  (pos - set) >> 4;
+				nextbyte = ((pos - set) & 0x0f) << 4;
 				if (tarindex + 1 < targsize)
 					target[tarindex+1] = nextbyte;
 				else if (nextbyte)
@@ -231,8 +242,8 @@ b64_pton(src, target, targsize)
 			if (target) {
 				if (tarindex >= targsize)
 					return (-1);
-				target[tarindex]   |=  (pos - Base64) >> 2;
-				nextbyte = ((pos - Base64) & 0x03) << 6;
+				target[tarindex]   |=  (pos - set) >> 2;
+				nextbyte = ((pos - set) & 0x03) << 6;
 				if (tarindex + 1 < targsize)
 					target[tarindex+1] = nextbyte;
 				else if (nextbyte)
@@ -245,7 +256,7 @@ b64_pton(src, target, targsize)
 			if (target) {
 				if (tarindex >= targsize)
 					return (-1);
-				target[tarindex] |= (pos - Base64);
+				target[tarindex] |= (pos - set);
 			}
 			tarindex++;
 			state = 0;

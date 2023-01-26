@@ -7,7 +7,7 @@
 all: out/bsdsum 
 
 
-ARC := ChangeLog configure COPYING doc include libcrypto Makefile README.md
+ARC := ChangeLog configure COPYING doc include external Makefile README.md
 ARC += releases src tests TODO version
 
 .PHONY: targz
@@ -29,10 +29,16 @@ include config.mk
 
 OBJS := src/base64.o src/bsdsum.o src/test.o \
 	src/sha3.o src/size.o \
-	libcrypto/sha/sha256.o \
-	libcrypto/sha/sha1dgst.o \
-	libcrypto/sha/sha512.o \
-	libcrypto/md5/md5_dgst.o
+	external/libcrypto/sha/sha256.o \
+	external/libcrypto/sha/sha1dgst.o \
+	external/libcrypto/sha/sha512.o \
+	external/libcrypto/md5/md5_dgst.o \
+	external/whirlpool/byte_order.o \
+	external/whirlpool/whirlpool_sbox.o \
+	external/whirlpool/whirlpool.o \
+	external/blake/blake.o \
+	external/blake2/blake2b-ref.o \
+	external/blake2/blake2s-ref.o 
 
 DEFS := -DVERSION=\"$(VER)\" -DOS_$(OS)
 

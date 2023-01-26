@@ -91,6 +91,12 @@ bsdsum_op_t functions[] = {
 		(op_final_t)sha3_final,
 	},
 	{
+		"WHIRLPOOL", WHIRLPOOL_DIGEST_LEN, STYLE_NONE,
+		(op_init_t)rhash_whirlpool_init,
+		(op_update_t)rhash_whirlpool_update,
+		(op_final_t)rhash_whirlpool_final,
+	},
+	{
 		NULL, 0, 0, NULL,
 	}
 };
@@ -103,6 +109,7 @@ void bsdsum_init(bsdsum_t *bs)
 	bs->style = STYLE_DEFAULT;
 	bs->data = calloc(BUFFER_SZK, 1024);
 	bs->ofile = -1;
+	bs->enc64 = ENC64_NONE;
 }
 
 bsdsum_op_t* bsdsum_get_func(const char* name)
@@ -152,7 +159,7 @@ bsdsum_op_t* bsdsum_find_alg(const char *cp, int base64, int quiet)
 	}
 	if (hf->base64 == -1 && base64 != 0) {
 		if ( ! quiet)
-			warnx("%s doesn't support base64 output", hf->name);
+			warnx("%s doesn't support base64-style output", hf->name);
 		return NULL;
 	}
 	hf->split = (int) l;
@@ -160,7 +167,8 @@ bsdsum_op_t* bsdsum_find_alg(const char *cp, int base64, int quiet)
 }
 
 /* copy 'hf' as tail of the list bs->hl and return it */
-static bsdsum_op_t* bsdsum_op_add(bsdsum_t *bs, bsdsum_op_t *hf, int base64)
+static bsdsum_op_t* bsdsum_op_add(bsdsum_t *bs, bsdsum_op_t *hf, 
+				bsdsum_enc64_t enc64)
 {
 	bsdsum_op_t *hftmp;
 	bsdsum_op_t *o;
@@ -169,7 +177,10 @@ static bsdsum_op_t* bsdsum_op_add(bsdsum_t *bs, bsdsum_op_t *hf, int base64)
 	if (hftmp == NULL)
 		err(1, "out of memory");
 	*hftmp = *hf;
-	hftmp->base64 = base64;
+	if (enc64 != ENC64_NONE) {
+		hftmp->base64 = 1;
+		hftmp->enc64 = enc64;
+	}
 	hftmp->next = NULL;
 	if (bs->hl == NULL)
 		bs->hl = hftmp;
@@ -211,8 +222,14 @@ int main(int argc, char **argv)
 			bsdsum_usage();
 			break;
 		case 's':
-			if (strcasecmp("base64", optarg) == 0)
+			if (strcasecmp("base64", optarg) == 0) {
 				bs.style = STYLE_BASE64;
+				bs.enc64 = ENC64_DEFAULT;
+			}
+			else if (strcasecmp("sym64", optarg) == 0) {
+				bs.style = STYLE_BASE64;
+				bs.enc64 = ENC64_SYM;
+			}
 			else if (strcasecmp("gnu", optarg) == 0)
 				bs.style = STYLE_GNU;
 			else if (strcasecmp("cksum", optarg) == 0)
@@ -265,7 +282,7 @@ int main(int argc, char **argv)
 					(hf->split >= 2)))
 					errx(1, "style not supported for %s",
 						cp);
-				hf = bsdsum_op_add(&bs, hf, bs.base64);
+				hf = bsdsum_op_add(&bs, hf, bs.enc64);
 				if (hf->split >= 2)
 					use_split = 1;
 				hf->style = bs.style | hf->use_style;
@@ -384,7 +401,8 @@ void bsdsum_digest_end(bsdsum_op_t *hf)
 	}
 	else if ((hf->style & STYLE_MASK) == STYLE_BASE64) {
 		if (b64_ntop(hf->digest, hf->digestlen, 
-				hf->fdigest, sizeof(bsdsum_fdigest_t)) == -1)
+				hf->fdigest, sizeof(bsdsum_fdigest_t),
+				hf->enc64) == -1)
 			errx(1, "error encoding base64");
 	}
 	else if ((hf->style & STYLE_MASK) == STYLE_BINARY) {
@@ -934,13 +952,14 @@ bsdsum_usage(void)
 {
 	fprintf(stderr, 
 	"usage: bsdsum v" VERSION " - compute and check digests\n"
-	"        [-h] show this help\n"
-	"        [-t] only run a simple auto-test\n"
+	"        [-h] show this help.\n"
+	"        [-t] only run a simple auto-test.\n"
 	"        [-p] echoes stdin to stdout and appends checksum\n"
-	"             to stdout\n"
+	"             to stdout.\n"
         "        [-s STYLE] output format, one of:\n"
 	"             default: \"ALG (FILE) = RESULT\"\n"
 	"             base64: \"ALG (FILE) = BASE64_RESULT\"\n"
+	"             sym64: \"ALG (FILE) = BASE64_SYM_RESULT\"\n"
 	"             cksum: \"RESULT FILE\" (one space)\n"
 	"             gnu: \"RESULT  FILE\" (two spaces)\n"
 	"             terse: \"RESULT\" (hexadecimal, no file)\n"
@@ -954,6 +973,7 @@ bsdsum_usage(void)
 	"             'SHA512' compute SHA2-512 digest\n"
 	"             'SHA3-256' compute SHA3-256 digest (Keccak 1600)\n"
 	"             'SHA3-512' compute SHA3-512 digest (Keccak 1600)\n"
+	"             'WHIRLPOOL' compute WHIRLPOOL-512 digest\n"
 	"             'SIZE' count length of data (as in 'distinfo' files)\n"
 	"             'ALG:N' with ALG one of the algorithms above, \n"
 	"                     excepted SIZE, and N an integer between 2 and\n"
@@ -966,15 +986,15 @@ bsdsum_usage(void)
 	"                     Supported styles are 'default' and 'base64'.\n"
 	"        [-l] optional length of data to digest when one, and\n"
 	"             only one file to digest is specified. Implies\n"
-	"             -s terse\n"
+	"             -s terse.\n"
 	"        [-f] optional offset where to start when one, and\n"
 	"             only one file to digest is specified. Implies\n"
-	"             -s terse\n"
-	"        [-c] 'file' is a checklist\n"
+	"             -s terse.\n"
+	"        [-c] 'file' is a checklist.\n"
 	"        [-C checklist] bsdsum_compare the checksum of 'file' against\n"
-	"                       checksums in 'checklist'\n"
+	"                       checksums in 'checklist'.\n"
 	"        [-o hashfile] place the checksum into this file\n"
-	"                      instead of stdout\n"
+	"                      instead of stdout.\n"
 	"        [file ...]\n");
 
 	exit(EXIT_FAILURE);

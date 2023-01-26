@@ -29,6 +29,7 @@
 #include "sha/sha.h"
 #include "md5/md5.h"
 #include "sha3.h"
+#include "whirlpool.h"
 
 /* output styles */
 typedef enum {
@@ -62,6 +63,13 @@ typedef void (*op_final_t)(unsigned char *, void *);
 /* maximum count of threads for split-digest */
 #define MAX_SPLIT 16
 
+/* type of base64 encoding */
+typedef enum {
+	ENC64_NONE = 0,
+	ENC64_DEFAULT = 1, /* default character set */
+	ENC64_SYM = 2, /* use symbols */
+} bsdsum_enc64_t;
+
 /* descriptor for one operator */
 typedef struct bsdsum_op {
 	const char *name;
@@ -73,6 +81,7 @@ typedef struct bsdsum_op {
 	void *ctx;
 	int style;
 	int base64;
+	bsdsum_enc64_t enc64; /* character set when using base64 */
 	int split; /* N for algorithm ALG:N, 2 <= N <= 16 */
 	bsdsum_digest_t digest; /* output buffer (binary) */
 	bsdsum_fdigest_t fdigest; /* output buffer (formatted) */
@@ -87,12 +96,14 @@ typedef union bsdsum_ctx {
 	SHA256_CTX sha256;
 	SHA512_CTX sha512;
 	sha3_ctx_t sha3;
+	whirlpool_ctx whirlpool;
 	size_t size;
 } bsdsum_ctx_t;
 
 /* program global data */
 typedef struct {
 	int base64;
+	bsdsum_enc64_t enc64;
 	int cflag;
 	int pflag;
 	bsdsum_style_t style;
@@ -119,7 +130,8 @@ void size_update (bsdsum_ctx_t * ctx,
 void size_final (unsigned char *dg, bsdsum_ctx_t *ctx);
 
 int b64_ntop(const u_char *src, size_t srclength, 
-		char *target, size_t targsize);
+		char *target, size_t targsize,
+		bsdsum_enc64_t enc);
 
 void bsdsum_init(bsdsum_t *bs);
 

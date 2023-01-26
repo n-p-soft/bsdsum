@@ -1,5 +1,4 @@
-=====================
-bsdsum v1.4 (01/2023)
+bsdsum v1.5 (01/2023)
 =====================
 
   bsdsum is a tool for computing and checking digests of data. It runs under
@@ -24,20 +23,34 @@ formats:
     -s terse: output the raw hexadecimal result without the file name
     -s binary: output the raw binary digest
 
-  Supported algorithms are MD5, SHA1, SHA256, SHA384, SHA512 and the Keccak-1600
-SHA3-256 and SHA3-512. SIZE algorithm can be used to output the length of the
-source file. Multiple algorithms may be specified for each source of data, using
-the -a option (i.e. -a md5,sha1,size).
+  Supported algorithms are:
+
+   MD5, SHA1, SHA256, SHA384, SHA512,
+   Keccak-1600 SHA3-256 and SHA3-512.
+   WHIRLPOOL (512),
+   SIZE (output the length of the file). 
+
+  Multiple algorithms may be specified for each source of data, using the -a 
+option (i.e. -a md5,sha1,size).
+
+Split digests
+=============
 
   In addition, a special "split" mode can be used to compute digests of files
 only (not data sent thru stdin). The split mode is enabled using "-a ALG:N",
-where ALG is one of MD5, SHA1, SHA256, SHA384, SHA512, SHA3-256, SHA3-512 and
-N an integer greater or equal than 2. Each source file is split into N equal
-parts and each part is hashed in a separate thread to produce the digest D(i).
-Once the digests D(i) i=1..N are computed, they are concatenated and the final
-digest is the hash of this data: ALG(D(1)|...|D(N)). This let you use all the
-cpus of your machine; with two cpus, SHA256:2 is two times faster than SHA256
-(but *note* that the digests produced are not the same).
+where ALG is one of:
+
+  MD5, SHA1, SHA256, SHA384, SHA512, SHA3-256, SHA3-512, WHIRLPOOL, 
+
+  and N an integer greater or equal than 2. 
+
+  Each source file is split into N equal parts and each part is hashed in a 
+separate thread to produce the digest D(i). Once the digests D(i) i=1..N are 
+computed, they are concatenated and the final digest is the hash of this data:
+ALG(D(1)|...|D(N)). This let you use all the cpus of your machine; with two 
+cpus, SHA256:2 is two times faster than SHA256.
+
+  *note* that the digests produced using ALG and ALG:N are NOT the same.
 
 Usage
 =====
@@ -49,13 +62,17 @@ Usage
   - compute and display the SHA256 digest of file 'data':
 
         bsdsum -a sha256 data
-      or
+
+    or
+
         cat data | bsdsum -a sha256
 
   - store the SHA256:2 split digest of file 'data' into 'data.dg':
 
         bsdsum -a sha256:2 -o data.dg data
-      or
+
+    or
+
         bsdsum -a sha256:2 data > data.dg
 
   - check the digests stored in file 'data.dg':
