@@ -86,6 +86,21 @@ struct bsdsum_test {
 		"\x00", 1,
 		"4504cb0314fb2a4f7a692e696e487912fe3f2468fe312c73a5"
 		"278ec5", },
+	{ TEST_RESULT_STR, STYLE_TERSE, ENC64_NONE, "BLAKE256", 
+		"\x00", 1,
+    		"0ce8d4ef4dd7cd8d62dfded9d4edb0a7"
+    		"74ae6a41929a74da23109e8f11139c87", },
+	{ TEST_RESULT_STR, STYLE_TERSE, ENC64_NONE, "BLAKE384", 
+		"\x00", 1,
+    		"10281f67e135e90ae8e882251a355510"
+    		"a719367ad70227b137343e1bc122015c"
+    		"29391e8545b5272d13a7c2879da3d807", },
+	{ TEST_RESULT_STR, STYLE_TERSE, ENC64_NONE, "BLAKE512", 
+		"\x00", 1,
+		"97961587f6d970faba6d2478045de6d1"
+		"fabd09b61ae50932054d52bc29d31be4"
+		"ff9102b9f69e2bbdb83be13d4b9c0609"
+		"1e5fa0b48bd081b634058be0ec49beb3", },
 	/* parser tests */
 	{ TEST_PARSE, STYLE_NONE, ENC64_NONE, 
 		"PARSE1", "", 0, NULL, NULL },
