@@ -29,8 +29,8 @@ formats:
    Keccak-1600 SHA3-256 and SHA3-512.
    WHIRLPOOL (512),
    BLAKE224, BLAKE256, BLAKE384, BLAKE512,
-   BLAKE2B (512), BLAKE2S (256),
-   BLAKE3 (256),
+   BLAKE2B (512 bits, unkeyed), BLAKE2S (256 bits, unkeyed),
+   BLAKE3 (256 bits, unkeyed),
    SIZE (output the length of the file). 
 
   Multiple algorithms may be specified for each source of data, using the -a 
