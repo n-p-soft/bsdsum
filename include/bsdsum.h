@@ -31,6 +31,7 @@
 #include "bsdsum_sha3.h"
 #include "whirlpool.h"
 #include "blake.h"
+#include "blake3.h"
 
 /* output styles */
 typedef enum {
@@ -103,6 +104,7 @@ typedef union bsdsum_ctx {
 	blake256_ctx blake256;
 	blake384_ctx blake384;
 	blake512_ctx blake512;
+	blake3_hasher blake3;
 } bsdsum_ctx_t;
 
 /* program global data */

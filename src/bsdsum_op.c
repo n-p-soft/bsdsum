@@ -115,6 +115,12 @@ bsdsum_op_t bsdsum_ops[] = {
 		(op_final_t)blake512_final,
 	},
 	{
+		"BLAKE3", BLAKE3_OUT_LEN, STYLE_NONE,
+		(op_init_t)blake3_hasher_init,
+		(op_update_t)blake3_hasher_update,
+		(op_final_t)blake3_final,
+	},
+	{
 		NULL, 0, 0, NULL,
 	}
 };

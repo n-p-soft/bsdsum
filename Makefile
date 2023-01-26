@@ -45,7 +45,10 @@ OBJS := src/bsdsum_b64.o \
 	external/whirlpool/whirlpool.o \
 	external/blake/blake.o \
 	external/blake2/blake2b-ref.o \
-	external/blake2/blake2s-ref.o 
+	external/blake2/blake2s-ref.o \
+	external/blake3/blake3_dispatch.o \
+	external/blake3/blake3_portable.o \
+	external/blake3/blake3.o 
 
 DEFS := -DVERSION=\"$(VER)\" -DOS_$(OS)
 

@@ -28,6 +28,8 @@ formats:
    MD5, SHA1, SHA256, SHA384, SHA512,
    Keccak-1600 SHA3-256 and SHA3-512.
    WHIRLPOOL (512),
+   BLAKE224, BLAKE256, BLAKE384, BLAKE512,
+   BLAKE3,
    SIZE (output the length of the file). 
 
   Multiple algorithms may be specified for each source of data, using the -a 
@@ -41,6 +43,7 @@ only (not data sent thru stdin). The split mode is enabled using "-a ALG:N",
 where ALG is one of:
 
   MD5, SHA1, SHA256, SHA384, SHA512, SHA3-256, SHA3-512, WHIRLPOOL, 
+  BLAKE224, BLAKE256, BLAKE384, BLAKE512, BLAKE3
 
   and N an integer greater or equal than 2. 
 
