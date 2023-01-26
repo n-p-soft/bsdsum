@@ -31,6 +31,7 @@
 #include "bsdsum_sha3.h"
 #include "whirlpool.h"
 #include "blake.h"
+#include "blake2.h"
 #include "blake3.h"
 
 /* output styles */
@@ -105,6 +106,8 @@ typedef union bsdsum_ctx {
 	blake384_ctx blake384;
 	blake512_ctx blake512;
 	blake3_hasher blake3;
+	blake2b_state blake2b;
+	blake2s_state blake2s;
 } bsdsum_ctx_t;
 
 /* program global data */

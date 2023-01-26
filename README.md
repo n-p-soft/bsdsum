@@ -29,6 +29,7 @@ formats:
    Keccak-1600 SHA3-256 and SHA3-512.
    WHIRLPOOL (512),
    BLAKE224, BLAKE256, BLAKE384, BLAKE512,
+   BLAKE2B (512), BLAKE2S (256),
    BLAKE3 (256),
    SIZE (output the length of the file). 
 
@@ -42,8 +43,7 @@ Split digests
 only (not data sent thru stdin). The split mode is enabled using "-a ALG:N",
 where ALG is one of:
 
-  MD5, SHA1, SHA256, SHA384, SHA512, SHA3-256, SHA3-512, WHIRLPOOL, 
-  BLAKE224, BLAKE256, BLAKE384, BLAKE512, BLAKE3
+  MD5, SHAxxx, SHA3-xxx, WHIRLPOOL, BLAKExxx
 
   and N an integer greater or equal than 2. 
 

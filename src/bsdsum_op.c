@@ -121,6 +121,18 @@ bsdsum_op_t bsdsum_ops[] = {
 		(op_final_t)blake3_final,
 	},
 	{
+		"BLAKE2B", BLAKE2B_OUTBYTES, STYLE_NONE,
+		(op_init_t)blake2b_start,
+		(op_update_t)blake2b_update,
+		(op_final_t)blake2b_end,
+	},
+	{
+		"BLAKE2S", BLAKE2S_OUTBYTES, STYLE_NONE,
+		(op_init_t)blake2s_start,
+		(op_update_t)blake2s_update,
+		(op_final_t)blake2s_end,
+	},
+	{
 		NULL, 0, 0, NULL,
 	}
 };
