@@ -91,6 +91,30 @@ bsdsum_op_t bsdsum_ops[] = {
 		(op_final_t)rhash_whirlpool_final,
 	},
 	{
+		"BLAKE224", BLAKE224_DIGEST_LEN, STYLE_NONE,
+		(op_init_t)blake224_init,
+		(op_update_t)blake224_update,
+		(op_final_t)blake224_final,
+	},
+	{
+		"BLAKE256", BLAKE256_DIGEST_LEN, STYLE_NONE,
+		(op_init_t)blake256_init,
+		(op_update_t)blake256_update,
+		(op_final_t)blake256_final,
+	},
+	{
+		"BLAKE384", BLAKE384_DIGEST_LEN, STYLE_NONE,
+		(op_init_t)blake384_init,
+		(op_update_t)blake384_update,
+		(op_final_t)blake384_final,
+	},
+	{
+		"BLAKE512", BLAKE512_DIGEST_LEN, STYLE_NONE,
+		(op_init_t)blake512_init,
+		(op_update_t)blake512_update,
+		(op_final_t)blake512_final,
+	},
+	{
 		NULL, 0, 0, NULL,
 	}
 };
