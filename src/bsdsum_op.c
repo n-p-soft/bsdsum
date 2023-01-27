@@ -191,104 +191,18 @@ bsdsum_op_t* bsdsum_op_find_alg (const char *cp, int base64, int quiet)
 	return hf;
 }
 
-/* find the line format:
- * Possible forms:
- *  ALGORITHM (FILENAME) = CHECKSUM
- *  CHECKSUM  FILENAME
- *  CHECKSUM FILENAME
- * Returns STYLE_ or -1 on error.
- */
-bsdsum_style_t bsdsum_op_parse (char *line, char **filename, char **dg,
-				bsdsum_op_t **hf)
+/* find the first function having STYLE_SPACE flag whose
+ * output length is len */
+bsdsum_op_t* bsdsum_op_for_length(size_t len)
 {
-	char *p;
-	char *q;
-	size_t len;
-	bsdsum_style_t st;
 	int i;
 
-	*hf = NULL;
-	*filename = *dg = NULL;
-	if (line == NULL)
-		return STYLE_NONE;
-	p = strchr(line, '\n');
-	if (p)
-		*p = '\0';
-	if (*line == '\0')
-		return STYLE_NONE;
-	p = strchr(line, ' ');
-	if (p == NULL)
-		return STYLE_NONE;
-	if (p[1] == '(') {
-		*p++ = '\0';
-		*p++ = '\0';
-		*hf = bsdsum_op_find_alg(line, 0, 1);
-		if (*hf == NULL)
-			return STYLE_UNSUPPORTED;
-		(*hf)->style = STYLE_NONE;
-		(*hf)->base64 = 0;	
-		*filename = p;
-		p = strchr(p, ')');
-		if (p == NULL)
-			return STYLE_ERROR;
-		*p++ = 0;
-		if ((p[0] != ' ') || (p[1] != '=') || (p[2] != ' '))
-			return STYLE_ERROR;
-		*dg = p + 3;
-
-		/* Check the length to see if this could be
-		 * a valid checksum.  If hex, it will be 2x the
-		 * size of the binary data.  For base64, we have
-		 * to check both with and without the '=' padding. */
-		len = strlen(*dg);
-		if ((*hf)->use_style & STYLE_TEXT)
-			(*hf)->style |= STYLE_TEXT;
-		else if (len != (*hf)->digestlen * 2) {
-			size_t len2;
-
-			if ((*dg)[len - 1] == '=') {
-				/* use padding */
-				len2 = 4 * (((*hf)->digestlen + 2) / 3);
-			} else {
-				/* no padding */
-				len2 = (4 * (*hf)->digestlen + 2) / 3;
-			}
-			if (len != len2)
-				return STYLE_ERROR;
-			(*hf)->base64 = 1;
-			(*hf)->style |= STYLE_BASE64;
-		}
-		else {
-			(*hf)->base64 = 0;
-			(*hf)->style |= STYLE_DEFAULT;
-		}
-		return (*hf)->style;
-	}
-
-	/* GNU coreutils or cksum style */
-	*dg = line;
-	*p++ = '\0';
-	if (*p == ' ') {
-		st = STYLE_GNU;
-		p++;			
-	}
-	else
-		st = STYLE_CKSUM;
-	*filename = p;
-	len = strlen(*dg);
 	for (i = 0; bsdsum_ops[i].name; i++) {
 		if ( ! (bsdsum_ops[i].use_style & STYLE_SPACE))
 			continue;
 		if (len == bsdsum_ops[i].digestlen * 2)
-			break;
+			return &bsdsum_ops[i];
 	}
-	if (bsdsum_ops[i].name == NULL)
-		return STYLE_UNSUPPORTED;
-	*hf = &bsdsum_ops[i];
-	(*hf)->style = st;
-	(*hf)->split = 0;
-	(*hf)->base64 = 0;
-	return st;
+	return NULL;
 }
-
 

@@ -49,13 +49,12 @@ static void bsdsum_init (bsdsum_t *bs)
 	bs->style = STYLE_DEFAULT;
 	bs->data = calloc(BUFFER_SZK, 1024);
 	bs->ofile = -1;
-	bs->enc64 = ENC64_NONE;
 }
 
 
 /* copy 'hf' as tail of the list bs->hl and return it */
 static bsdsum_op_t* bsdsum_add_op (bsdsum_t *bs, bsdsum_op_t *hf, 
-					bsdsum_enc64_t enc64)
+					bsdsum_style_t st)
 {
 	bsdsum_op_t *hftmp;
 	bsdsum_op_t *o;
@@ -64,10 +63,8 @@ static bsdsum_op_t* bsdsum_add_op (bsdsum_t *bs, bsdsum_op_t *hf,
 	if (hftmp == NULL)
 		err(1, "out of memory");
 	*hftmp = *hf;
-	if (enc64 != ENC64_NONE) {
+	if ((st & STYLE_MASK) == STYLE_BASE64) 
 		hftmp->base64 = 1;
-		hftmp->enc64 = enc64;
-	}
 	hftmp->next = NULL;
 	if (bs->hl == NULL)
 		bs->hl = hftmp;
@@ -110,14 +107,10 @@ int main (int argc, char **argv)
 			exit(0);
 			break;
 		case 's':
-			if (strcasecmp("base64", optarg) == 0) {
+			if (strcasecmp("base64", optarg) == 0) 
 				bs.style = STYLE_BASE64;
-				bs.enc64 = ENC64_DEFAULT;
-			}
-			else if (strcasecmp("sym64", optarg) == 0) {
-				bs.style = STYLE_BASE64;
-				bs.enc64 = ENC64_SYM;
-			}
+			else if (strcasecmp("mix32", optarg) == 0) 
+				bs.style = STYLE_MIX32;
 			else if (strcasecmp("gnu", optarg) == 0)
 				bs.style = STYLE_GNU;
 			else if (strcasecmp("cksum", optarg) == 0)
@@ -173,7 +166,7 @@ int main (int argc, char **argv)
 					(hf->split >= 2)))
 					errx(1, "style not supported for %s",
 						cp);
-				hf = bsdsum_add_op(&bs, hf, bs.enc64);
+				hf = bsdsum_add_op(&bs, hf, bs.style);
 				if (hf->split >= 2)
 					use_split = 1;
 				hf->style = bs.style | hf->use_style;
@@ -241,7 +234,7 @@ int main (int argc, char **argv)
 	if (bs.selective_checklist) {
 		int i;
 
-		bs.error = bsdsum_digest_filelist(&bs, bs.selective_checklist, 
+		bs.error = bsdsum_dgl_process(&bs, bs.selective_checklist, 
 							bs.hl, argc, argv);
 		for (i = 0; i < argc; i++) {
 			if (argv[i] != NULL) {
@@ -253,11 +246,11 @@ int main (int argc, char **argv)
 	} 
 	else if (bs.cflag) {
 		if (argc == 0)
-			bs.error = bsdsum_digest_filelist(&bs, "-", bs.hl,
+			bs.error = bsdsum_dgl_process(&bs, "-", bs.hl,
 								0, NULL);
 		else {
 			while (argc--) {
-				bs.error += bsdsum_digest_filelist(&bs, *argv++,
+				bs.error += bsdsum_dgl_process(&bs, *argv++,
 			  					bs.hl, 0, NULL);
 			}
 		}

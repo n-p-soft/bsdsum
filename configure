@@ -9,12 +9,12 @@ echo "-----------------------"
 
 OS=$(uname -s)
 VER=$(cat version)
-C_FLAGS="-Iinclude -Iexternal/libcrypto -Iexternal/blake "
-C_FLAGS+="-Iexternal/blake2 -Iexternal/blake3 "
-C_FLAGS+="-DBLAKE3_NO_AVX512 -DBLAKE3_NO_AVX2 "
-C_FLAGS+="-DBLAKE3_NO_SSE41 -DBLAKE3_NO_SSE2 "
-C_FLAGS+="-Iexternal/whirlpool "
-C_FLAGS+="-fstack-protector"
+C_FLAGS="-Iinclude -Iexternal/libcrypto -Iexternal/blake"
+C_FLAGS="${C_FLAGS} -Iexternal/blake2 -Iexternal/blake3"
+C_FLAGS="${C_FLAGS} -DBLAKE3_NO_AVX512 -DBLAKE3_NO_AVX2"
+C_FLAGS="${C_FLAGS} -DBLAKE3_NO_SSE41 -DBLAKE3_NO_SSE2"
+C_FLAGS="${C_FLAGS} -Iexternal/whirlpool "
+C_FLAGS="${C_FLAGS} -fstack-protector"
 PREFIX=/usr/local
 CC=
 OPTS=-O2

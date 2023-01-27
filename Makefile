@@ -36,6 +36,8 @@ OBJS := src/bsdsum_b64.o \
 	src/bsdsum_help.o \
 	src/bsdsum_tools.o \
 	src/bsdsum_digest.o \
+	src/bsdsum_dgl.o \
+	src/bsdsum_enc.o \
 	external/libcrypto/sha/sha256.o \
 	external/libcrypto/sha/sha1dgst.o \
 	external/libcrypto/sha/sha512.o \
@@ -95,6 +97,7 @@ clean:
 .PHONY: check
 check: out/bsdsum
 	@out/bsdsum -t || exit 1
-	@echo "FILELIST1"; cd tests; ../out/bsdsum -c sums || exit 1
-	@echo "FILELIST2"; cd tests; ../out/bsdsum -c sums0 || exit 1
+	@echo "* FILELIST1"; cd tests; ../out/bsdsum -c sums || exit 1
+	@echo "* FILELIST2"; cd tests; ../out/bsdsum -c sums0 || exit 1
+	@echo "* FILELIST3"; cd tests; ../out/bsdsum -C sums a || exit 1
 

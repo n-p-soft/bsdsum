@@ -52,22 +52,8 @@
 
 static const char default_set[] =
 	"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-static const char sym_set[] =
-	"Ii0Aa1oYy2Bb3Ff4+g5K|k6L7Mm8Nn9!p<Qq>Rr$Ss@Tt;Vv.%WZ&z-?[]*G_/P^";
 
 static const char Pad64 = '=';
-
-static const char *b64_set(bsdsum_enc64_t enc)
-{
-	switch(enc) {
-		case ENC64_SYM:
-			return sym_set;
-		case ENC64_DEFAULT:
-			return default_set;
-		default:
-			return NULL;
-	}
-}
 
 /* (From RFC1521 and draft-ietf-dnssec-secext-03.txt)
    The following encoding technique is taken from RFC 1521 by Borenstein
@@ -133,14 +119,13 @@ static const char *b64_set(bsdsum_enc64_t enc)
    */
 
 int bsdsum_b64_ntop (unsigned char const *src, size_t srclength, 
-			char *target, size_t targsize,
-			bsdsum_enc64_t enc)
+			char *target, size_t targsize)
 {
 	size_t datalength = 0;
 	unsigned char input[3];
 	unsigned char output[4];
 	int i;
-	const char *set = b64_set(enc);
+	const char *set = default_set;
 
 	while (2 < srclength) {
 		input[0] = *src++;
@@ -194,12 +179,12 @@ int bsdsum_b64_ntop (unsigned char const *src, size_t srclength,
    it returns the number of data bytes stored at the target, or -1 on error.
  */
 int bsdsum_b64_pton (char const *src, unsigned char *target, 
-			size_t targsize, bsdsum_enc64_t enc)
+			size_t targsize)
 {
 	int tarindex, state, ch;
 	unsigned char nextbyte;
 	char *pos;
-	const char *set = b64_set(enc);
+	const char *set = default_set;
 
 	state = 0;
 	tarindex = 0;

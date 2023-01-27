@@ -17,7 +17,9 @@ formats:
   The style of output is specified with the "-s" option:
 
     -s default: for BSD format
-    -s base 64: for BSD base64-encoded format
+    -s base64: for BSD base64-encoded format
+    -s mix32: BSD format using a custom character set including 32 punctuation
+              signs, letters, digits
     -s gnu: for GNU coreutils output
     -s cksum: for cksum variant
     -s terse: output the raw hexadecimal result without the file name
@@ -27,7 +29,7 @@ formats:
 
    MD5, SHA1, SHA256, SHA384, SHA512,
    Keccak-1600 SHA3-256 and SHA3-512.
-   WHIRLPOOL (512),
+   WHIRLPOOL (512 bits),
    BLAKE224, BLAKE256, BLAKE384, BLAKE512,
    BLAKE2B (512 bits, unkeyed), BLAKE2S (256 bits, unkeyed),
    BLAKE3 (256 bits, unkeyed),
@@ -35,6 +37,7 @@ formats:
 
   Multiple algorithms may be specified for each source of data, using the -a 
 option (i.e. -a md5,sha1,size).
+
 
 Split digests
 =============
@@ -55,6 +58,7 @@ cpus, SHA256:2 is two times faster than SHA256.
 
   *note* that the digests produced using ALG and ALG:N are NOT the same.
 
+
 Usage
 =====
 
@@ -70,7 +74,9 @@ Usage
 
         cat data | bsdsum -a sha256
 
-  - store the SHA256:2 split digest of file 'data' into 'data.dg':
+  - store the SHA256:2 split digest of file 'data' into 'data.dg'
+    (the 'cat' method as above will not work for split digests, as
+    the length of the input data must be known):
 
         bsdsum -a sha256:2 -o data.dg data
 
@@ -78,9 +84,18 @@ Usage
 
         bsdsum -a sha256:2 data > data.dg
 
-  - check the digests stored in file 'data.dg':
+  - check the digests stored in the file 'data.dg':
 
         bsdsum -c data.dg
+
+  - check the digest for file 'my_file' from the list of digests 'data.dg':
+
+        bsdsum -C data.dg my_file
+
+  - check the MD5 digest (only) for file 'my_file' from the list of digests
+    'data.dg':
+
+        bsdsum -C data.dg -a md5 my_file
 
   - store the SHA3-256 digest, base64-encoded and the length of file 'data'
     into 'data.dg':
@@ -119,5 +134,25 @@ Build & install
   make clean: clean building tree, keeping configuration
   make distclean: clear all generated files
   make check: run the tests
+
+
+Lists of digests
+================
+
+  A list of digests is a file (as produced using the -o option) that stores
+hashes for many other files. Such a file may be specified when using the
+-c/-C options to verify a list of digests. Valid lines are:
+
+  - empty ones (ignored),
+
+  - lines starting with # (comments, ignored)
+
+  - "ALG(FILE) = DIGEST"
+
+  - "DIGEST  FILE" (two spaces)
+
+  - "DIGEST FILE" (one space)
+
+  Any other line will be rejected and an error reported.
 
 

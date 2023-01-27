@@ -38,7 +38,7 @@
 void bsdsum_digest_init (bsdsum_op_t *hf, int fd)
 {
 	if ((hf->ctx = calloc(1, sizeof(bsdsum_ctx_t))) == NULL)
-		err(1, "out of memory");
+		errx(1, "out of memory");
 	memset(hf->digest, 0, sizeof(bsdsum_digest_t));
 	hf->digest_fd = fd;
 	hf->init(hf->ctx);
@@ -53,9 +53,21 @@ void bsdsum_digest_end (bsdsum_op_t *hf)
 	}
 	else if ((hf->style & STYLE_MASK) == STYLE_BASE64) {
 		if (bsdsum_b64_ntop(hf->digest, hf->digestlen, 
-				hf->fdigest, sizeof(bsdsum_fdigest_t),
-				hf->enc64) == -1)
+				hf->fdigest, sizeof(bsdsum_fdigest_t))
+				 == -1)
 			errx(1, "error encoding base64");
+	}
+	else if ((hf->style & STYLE_MASK) == STYLE_MIX32) {
+		char *s;
+		size_t olen;
+
+		s = bsdsum_enc_32(hf->digest, hf->digestlen,
+					SET32_MIX, &olen);
+		if (s == NULL)
+			errx(1, "mix32 encoding not supported");
+		snprintf(hf->fdigest, sizeof(bsdsum_fdigest_t),
+				"%s", s);
+		free(s);
 	}
 	else if ((hf->style & STYLE_MASK) == STYLE_BINARY) {
 		/* nothing */
@@ -90,6 +102,7 @@ void bsdsum_digest_print (int ofile, const bsdsum_op_t *hf,
 	default:
 		break;
 	case STYLE_DEFAULT:
+	case STYLE_MIX32:
 	case STYLE_BASE64:
 		if (hf->split >= 2)
 			snprintf(alg, 32, "%s:%i", hf->name, hf->split);
@@ -207,9 +220,9 @@ int bsdsum_digest_run (bsdsum_op_t *hf,
  * does not return on erroneous offset/length parameters.
  * offset/length set to -1 is ignored.
  */
-static int bsdsum_digest_mmap_file (bsdsum_t *bs, const char *file,
-					bsdsum_op_t *hf,
-					long offset, long length)
+int bsdsum_digest_mmap_file (bsdsum_t *bs, const char *file,
+				bsdsum_op_t *hf,
+				long offset, long length)
 {
 	struct stat st;
 	void *base;
@@ -371,7 +384,7 @@ int bsdsum_digest_filelist(bsdsum_t* bs, const char *file,
 			break;
 		}
 		lineno++;
-		st = bsdsum_op_parse(line, &filename, &checksum, &hf);
+		st = bsdsum_dgl_parse_line(line, &filename, &checksum, &hf);
 		skip = 0;
 		switch (st) {
 		case STYLE_UNSUPPORTED:

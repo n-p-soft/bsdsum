@@ -39,8 +39,10 @@ typedef enum {
 	STYLE_NONE=0,
 	STYLE_UNSUPPORTED=1,
 	STYLE_ERROR=2,
+	STYLE_COMMENT, 	/* comment line in list of digests */
 	STYLE_DEFAULT,	/* ALG(FILE)=RESULT */
 	STYLE_BASE64,	/* ALG(FILE)=BASE64_RESULT */
+	STYLE_MIX32,	/* ALG(FILE)=MIX32_RESULT */
 	STYLE_CKSUM,	/* RESULT FILE */
 	STYLE_TERSE,	/* RESULT */
 	STYLE_GNU,	/* RESULT  FILE */
@@ -66,12 +68,11 @@ typedef void (*op_final_t)(unsigned char *, void *);
 /* maximum count of threads for split-digest */
 #define MAX_SPLIT 16
 
-/* type of base64 encoding */
+/* type of base32 encoding */
 typedef enum {
-	ENC64_NONE = 0,
-	ENC64_DEFAULT = 1, /* default character set */
-	ENC64_SYM = 2, /* use symbols */
-} bsdsum_enc64_t;
+	SET32_NONE = 0,
+	SET32_MIX = 1, /* default mixed character set */
+} bsdsum_set32_t;
 
 /* descriptor for one operator */
 typedef struct bsdsum_op {
@@ -84,7 +85,6 @@ typedef struct bsdsum_op {
 	void *ctx;
 	int style;
 	int base64;
-	bsdsum_enc64_t enc64; /* character set when using base64 */
 	int split; /* N for algorithm ALG:N, 2 <= N <= 16 */
 	bsdsum_digest_t digest; /* output buffer (binary) */
 	bsdsum_fdigest_t fdigest; /* output buffer (formatted) */
@@ -113,7 +113,6 @@ typedef union bsdsum_ctx {
 /* program global data */
 typedef struct {
 	int base64;
-	bsdsum_enc64_t enc64;
 	int cflag;
 	int pflag;
 	bsdsum_style_t style;
@@ -140,18 +139,20 @@ void bsdsum_size_update (bsdsum_ctx_t * ctx,
 void bsdsum_size_final (unsigned char *dg, bsdsum_ctx_t *ctx);
 
 int bsdsum_b64_ntop(const unsigned char *src, size_t srclength, 
-			char *target, size_t targsize,
-			bsdsum_enc64_t enc);
+			char *target, size_t targsize);
 
 bsdsum_op_t* bsdsum_op_get(const char* name);
 
 bsdsum_op_t* bsdsum_op_find_alg(const char *cp, int base64, int quiet);
 
-bsdsum_style_t bsdsum_op_parse(char *line, char **filename, char **dg,
-				bsdsum_op_t **hf);
+bsdsum_op_t* bsdsum_op_for_length(size_t len);
 
 int bsdsum_digest_run (bsdsum_op_t *hf,
 			unsigned char* buf, long length, int split);
+
+int bsdsum_digest_mmap_file (bsdsum_t *bs, const char *file,
+				bsdsum_op_t *hf,
+				long offset, long length);
 
 void bsdsum_digest_init(bsdsum_op_t *hf, int fd);
 
@@ -162,13 +163,22 @@ int  bsdsum_digest_file(bsdsum_t*, const char *, int);
 void bsdsum_digest_print(int, const bsdsum_op_t *, 
 				const char *);
 
-int bsdsum_digest_filelist(bsdsum_t*, const char *, bsdsum_op_t *, 
+int bsdsum_dgl_process(bsdsum_t*, const char *, bsdsum_op_t *, 
 				int, char **);
+
+bsdsum_style_t bsdsum_dgl_parse_line (char *line, 
+					char **filename, char **dg,
+					bsdsum_op_t **hf);
 
 void bsdsum_help(void);
 
 void bsdsum_autotest(void);
 
 char* bsdsum_getline(int fd, int* eof, const char *filename);
+
+char* bsdsum_enc_32 (const unsigned char *data, size_t len,
+			bsdsum_set32_t set, size_t *olen);
+
+bsdsum_style_t bsdsum_enc_test(const char *s);
 
 #endif
