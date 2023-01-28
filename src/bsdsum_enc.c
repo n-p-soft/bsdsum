@@ -101,8 +101,10 @@ char* bsdsum_enc_32 (const unsigned char *data, size_t len,
 	return out;
 }
 
-/* parse a string to see if it is possibly a 5-bit encoded hash */
-bsdsum_style_t bsdsum_enc_test(const char *s)
+/* parse a string to see if it is possibly a 5-bit encoded hash.
+ * 'alg_len' is the length in bytes of the digest algorithm or 0 if
+ * unknown. Returns STYLE_NONE, STYLE_ERROR or STYLE_MIX32. */
+bsdsum_style_t bsdsum_enc_test(const char *s,size_t alg_len)
 {
 	size_t len = strlen(s);
 	int i;
@@ -111,10 +113,24 @@ bsdsum_style_t bsdsum_enc_test(const char *s)
 		case 0:
 			return STYLE_NONE;
 		case 26:
+			if (alg_len && (alg_len != 16))
+				return STYLE_ERROR;
+			break;
 		case 45:
+			if (alg_len && (alg_len != 28))
+				return STYLE_ERROR;
+			break;
 		case 52:
+			if (alg_len && (alg_len != 32))
+				return STYLE_ERROR;
+			break;
 		case 77:
+			if (alg_len && (alg_len != 48))
+				return STYLE_ERROR;
+			break;
 		case 103:
+			if (alg_len && (alg_len != 64))
+				return STYLE_ERROR;
 			break;
 		default:
 			return STYLE_NONE;
@@ -123,6 +139,6 @@ bsdsum_style_t bsdsum_enc_test(const char *s)
 		if (strchr(set_mix, s[i]) == NULL)
 			return STYLE_NONE;
 	}
-	return STYLE_MIX32;
+	return STYLE_M32;
 }
 

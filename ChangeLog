@@ -1,6 +1,12 @@
 bsdsum
 ======
 
+see git log for more details.
+
+2023/01 - v1.5
+* add BLAKExxx, WHIRLPOOL algorithms
+* add "mix32" encoding
+
 2022/12, 2023/01 - v1.4
 * add split digest
 * add binary style

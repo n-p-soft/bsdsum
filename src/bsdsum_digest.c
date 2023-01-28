@@ -35,6 +35,8 @@
 
 #include "bsdsum.h"
 
+/* Initialize one operator. 'fd' is the optional output file
+ * descriptor. */
 void bsdsum_digest_init (bsdsum_op_t *hf, int fd)
 {
 	if ((hf->ctx = calloc(1, sizeof(bsdsum_ctx_t))) == NULL)
@@ -47,17 +49,17 @@ void bsdsum_digest_init (bsdsum_op_t *hf, int fd)
 void bsdsum_digest_end (bsdsum_op_t *hf)
 {
 	hf->final(hf->digest, hf->ctx);
-	if (hf->style & STYLE_TEXT) {
+	if (hf->style & STYLE_TXT) {
 		snprintf(hf->fdigest, sizeof(bsdsum_fdigest_t), 
 				"%s", hf->digest);
 	}
-	else if ((hf->style & STYLE_MASK) == STYLE_BASE64) {
+	else if (hf->style & STYLE_B64) {
 		if (bsdsum_b64_ntop(hf->digest, hf->digestlen, 
 				hf->fdigest, sizeof(bsdsum_fdigest_t))
 				 == -1)
 			errx(1, "error encoding base64");
 	}
-	else if ((hf->style & STYLE_MASK) == STYLE_MIX32) {
+	else if (hf->style & STYLE_M32) {
 		char *s;
 		size_t olen;
 
@@ -69,9 +71,11 @@ void bsdsum_digest_end (bsdsum_op_t *hf)
 				"%s", s);
 		free(s);
 	}
-	else if ((hf->style & STYLE_MASK) == STYLE_BINARY) {
+	else if (hf->style & STYLE_BIN) {
 		/* nothing */
-	} else {
+	}
+	else if (hf->style & 
+		(STYLE_HEXA | STYLE_GNU | STYLE_CKSUM | STYLE_TERSE)) {
 		int i;
 		const char* hexa = "0123456789abcdef";
 
@@ -91,39 +95,29 @@ void bsdsum_digest_end (bsdsum_op_t *hf)
 	hf->ctx = NULL;
 }
 
+/* Output an encoded digest into file 'ofile'. */
 void bsdsum_digest_print (int ofile, const bsdsum_op_t *hf, 
 				const char *what)
 {
-	bsdsum_style_t st = hf->style & STYLE_MASK;
+	bsdsum_style_t st = hf->style;
 	char alg[32];
 
-	switch (st & STYLE_MASK) {
-	case STYLE_NONE:
-	default:
-		break;
-	case STYLE_DEFAULT:
-	case STYLE_MIX32:
-	case STYLE_BASE64:
+	if (st & STYLE_TERSE)
+		(void)dprintf(ofile, "%s\n", hf->fdigest);
+	else if (st & STYLE_BIN)
+		(void)write(ofile, hf->digest, hf->digestlen);
+	else if (st & (STYLE_M32 | STYLE_B64 | STYLE_HEXA | STYLE_TXT)) {
 		if (hf->split >= 2)
 			snprintf(alg, 32, "%s:%i", hf->name, hf->split);
 		else
 			snprintf(alg, 32, "%s", hf->name);
 		(void)dprintf(ofile, 
 			"%s (%s) = %s\n", alg, what, hf->fdigest);
-		break;
-	case STYLE_CKSUM:
-		(void)dprintf(ofile, "%s %s\n", hf->fdigest, what);
-		break;
-	case STYLE_GNU:
-		(void)dprintf(ofile, "%s  %s\n", hf->fdigest, what);
-		break;
-	case STYLE_BINARY:
-		(void)write(ofile, hf->digest, hf->digestlen);
-		break;
-	case STYLE_TERSE:
-		(void)dprintf(ofile, "%s\n", hf->fdigest);
-		break;
 	}
+	else if (st & STYLE_CKSUM)
+		(void)dprintf(ofile, "%s %s\n", hf->fdigest, what);
+	else if (st & STYLE_GNU)
+		(void)dprintf(ofile, "%s  %s\n", hf->fdigest, what);
 }
 
 /* compute one digest for (buf,length) and operator 'hf'. */
@@ -218,27 +212,26 @@ int bsdsum_digest_run (bsdsum_op_t *hf,
 /* Try to mmap given file and digest it. 
  * The function returns errno on error, or 0 on success, or
  * does not return on erroneous offset/length parameters.
- * offset/length set to -1 is ignored.
+ * offset/length set to -1 are ignored.
  */
-int bsdsum_digest_mmap_file (bsdsum_t *bs, const char *file,
+int bsdsum_digest_mmap_file (const char *file,
 				bsdsum_op_t *hf,
 				long offset, long length)
 {
 	struct stat st;
 	void *base;
 	size_t len;
-	int e;
+	int e, f;
 	int r = 0;
 	bsdsum_op_t *o;
 
 	//printf("%s %i %i\n", file, offset, length);
-	int f = open(file, O_RDONLY);
+	f = open(file, O_RDONLY);
 	e = errno;
 	if (f < 0) {
 		close(f);
 		return e;
 	}
-	bs->current_file = file;
 	if (fstat(f, &st)) {
 		e = errno;
 		close(f);
@@ -287,197 +280,55 @@ int bsdsum_digest_mmap_file (bsdsum_t *bs, const char *file,
 	return(r);
 }
 
-int bsdsum_digest_file (bsdsum_t* bs, const char *file, int echo)
+/* Digest one file using algorithms 'ops' and output the result into file
+ * 'ofile'.
+ */
+int bsdsum_digest_file (int ofile, bsdsum_op_t* ops, 
+			const char *file, int echo,
+			long offset, long length)
 {
 	bsdsum_op_t *hf;
 	size_t nread;
 	int std = 0;
 	int error;
+	unsigned char data[BUFFER_SZK*1024];
 
 	if (strcmp(file, "-") == 0)
 		std = 1;
 
 	/* process all data */
 	if (std) {
-		for (hf = bs->hl; hf; hf = hf->next) 
+		for (hf = ops; hf; hf = hf->next) 
 			bsdsum_digest_init(hf, -1);
-		while ((nread = fread(bs->data, 1UL, 
+		while ((nread = fread(data, 1UL, 
 					BUFFER_SZK*1024, stdin)) != 0) {
 			if (echo) {
-				(void)fwrite(bs->data, nread, 1UL, stdout);
+				(void)fwrite(data, nread, 1UL, stdout);
 				if (fflush(stdout) != 0)
 					err(1, "stdout: write error");
 			}
-			for (hf = bs->hl; hf; hf = hf->next) {
+			for (hf = ops; hf; hf = hf->next) {
 				hf->update(hf->ctx, 
-					(unsigned char*)bs->data, nread);
+					(unsigned char*)data, nread);
 			}
 		}
-		for (hf = bs->hl; hf; hf = hf->next) 
+		for (hf = ops; hf; hf = hf->next) 
 			bsdsum_digest_end(hf);
 	}
 	else {
-		error = bsdsum_digest_mmap_file(bs, file, bs->hl, 
-						bs->offset, bs->length);
+		error = bsdsum_digest_mmap_file(file, ops, 
+						offset, length);
 		if (error)
 			err(error, "could not digest file %s", file);
 	}
 
-	for (hf = bs->hl; hf; hf = hf->next) {
+	for (hf = ops; hf; hf = hf->next) {
 		if (std)
-			dprintf(bs->ofile, "%s\n", hf->fdigest);
+			dprintf(ofile, "%s\n", hf->fdigest);
 		else
-			bsdsum_digest_print(bs->ofile, hf, file);
+			bsdsum_digest_print(ofile, hf, file);
 	}
 	return(0);
 }
 
-/*
- * Parse through the input file looking for valid lines.
- * If one is found, use this checksum and file as a reference and
- * generate a new checksum against the file on the filesystem.
- * Print out the result of each comparison.
- */
-int bsdsum_digest_filelist(bsdsum_t* bs, const char *file, 
-				bsdsum_op_t *defhash, 
-				int selcount, char **sel)
-{
-	int d_error, cmp, i;
-	char *filename, *checksum, *line;
-	ssize_t linelen;
-	int listfd;
-	int eof = 0;
-	int std = 0;
-	size_t len, linesize, nread;
-	int lineno = 0;
-	int fmterr = 0;
-	int skipped = 0;
-	int *sel_found = NULL;
-	bsdsum_op_t *hf;
-	bsdsum_style_t st;
-	char algorithm[16];
-	int skip;
-
-	if (strcmp(file, "-") == 0) {
-		listfd = 0;
-		std = 1;
-	} else if ((listfd = open(file, O_RDONLY)) < 0) {
-		warn("cannot open %s", file);
-		return(1);
-	}
-
-	if (sel != NULL) {
-		sel_found = calloc((size_t)selcount, sizeof(*sel_found));
-		if (sel_found == NULL)
-			err(1, NULL);
-	}
-
-	bs->error = 0;
-	line = NULL;
-	linesize = 0;
-	while(eof == 0) {
-		line = bsdsum_getline(listfd, &eof, file);
-		if (eof && ( ! line || ! *line))
-			break;
-		if (line == NULL) {
-			bs->error++;
-			break;
-		}
-		lineno++;
-		st = bsdsum_dgl_parse_line(line, &filename, &checksum, &hf);
-		skip = 0;
-		switch (st) {
-		case STYLE_UNSUPPORTED:
-			warnx("line %i: unsupported algorithm", lineno);
-			bs->error++;
-			skip = 1;
-			break;
-		case STYLE_ERROR:
-			warnx("line %i: format not recognized", lineno);
-			fmterr++;
-			skip = 1;
-			break;
-		case STYLE_NONE:
-			warnx("line %i: skipping", lineno);
-			skip = 1;
-			break;
-		default:
-			if (defhash && hf != defhash)
-				skip = 1;
-			break;
-		}
-		if (skip) {
-			skipped++;
-			free(line);
-			continue;
-		}
-		//printf("%x <%s> <%s>\n", st, filename, checksum);
-
-		/* If only a selection of files is wanted, proceed only
-		 * if the filename matches one of those in the selection. */
-		if (sel != NULL) {
-			for (i = 0; i < selcount; i++) {
-				if (strcmp(sel[i], filename) == 0) {
-					sel_found[i] = 1;
-					break;
-				}
-			}
-			if (i == selcount)
-				continue;
-		}
-		if (hf->split >= 2)
-			snprintf(algorithm, 16,
-				"%s:%i", hf->name, hf->split);
-		else
-			snprintf(algorithm, 16, "%s", hf->name);
-
-		/* hash the file */
-		d_error = bsdsum_digest_mmap_file(bs, filename, 
-							hf, -1, -1);
-		if (d_error) {
-			printf("(%s) %s: %s\n", algorithm, filename,
-			    (d_error == ENOENT ? "MISSING" : "FAILED"));
-			if (d_error != ENOENT)
-				warnx("cannot digest %s", filename);
-			bs->error++;
-		}
-		else {
-			if (hf->base64)
-				cmp = strcmp(checksum, hf->fdigest);
-			else
-				cmp = strcasecmp(checksum, hf->fdigest);
-			if (cmp == 0) {
-				(void)printf("(%s) %s: OK\n", algorithm,
-					    filename);
-			} else {
-				(void)printf("(%s) %s: FAILED\n", 
-						algorithm, filename);
-				bs->error++;
-			}
-		}
-		free(line);
-	}
-	if (std == 0)
-		close(listfd);
-	if (skipped) {
-		warnx("%s: %i line(s) skipped", file, skipped);
-		bs->error++;
-	}
-	if (fmterr) {
-		warnx("%s: found ill-formatted checksum line(s)", file);
-		bs->error++;
-	}
-	if (sel_found != NULL) {
-		/* Mark found files by setting them to NULL so that we can
-		 * detect files that are missing from the checklist later. */
-		for (i = 0; i < selcount; i++) {
-			if (sel_found[i])
-				sel[i] = NULL;
-		}
-		free(sel_found);
-	}
-	if (bs->error)
-		warnx("%s: %i error(s)", file, bs->error);
-	return(bs->error);
-}
 

@@ -37,97 +37,97 @@
 
 bsdsum_op_t bsdsum_ops[] = {
 	{
-		"SIZE", 16, STYLE_TEXT | STYLE_NOSPLIT,
+		"SIZE", 16, STYLE_TXT | STYLE_NOSPLIT | STYLE_FIXED,
 		(op_init_t)bsdsum_size_init,
 		(op_update_t)bsdsum_size_update,
 		(op_final_t)bsdsum_size_final,
 	},
 	{
-		"MD5", MD5_DIGEST_LENGTH, STYLE_SPACE,
+		"MD5", MD5_DIGEST_LENGTH, STYLE_ANY,
 		(op_init_t)MD5_Init,
 		(op_update_t)MD5_Update,
 		(op_final_t)MD5_Final,
 	},
 	{
-		"SHA1", SHA_DIGEST_LENGTH, STYLE_SPACE,
+		"SHA1", SHA_DIGEST_LENGTH, STYLE_ANY,
 		(op_init_t)SHA1_Init,
 		(op_update_t)SHA1_Update,
 		(op_final_t)SHA1_Final,
 	},
 	{
-		"SHA256", SHA256_DIGEST_LENGTH, STYLE_SPACE,
+		"SHA256", SHA256_DIGEST_LENGTH, STYLE_ANY,
 		(op_init_t)SHA256_Init,
 		(op_update_t)SHA256_Update,
 		(op_final_t)SHA256_Final,
 	},
 	{
-		"SHA384", SHA384_DIGEST_LENGTH, STYLE_SPACE,
+		"SHA384", SHA384_DIGEST_LENGTH, STYLE_ANY,
 		(op_init_t)SHA384_Init,
 		(op_update_t)SHA384_Update,
 		(op_final_t)SHA384_Final,
 	},
 	{
-		"SHA512", SHA512_DIGEST_LENGTH, STYLE_SPACE,
+		"SHA512", SHA512_DIGEST_LENGTH, STYLE_ANY,
 		(op_init_t)SHA512_Init,
 		(op_update_t)SHA512_Update,
 		(op_final_t)SHA512_Final,
 	},
 	{
-		"SHA3-256", SHA256_DIGEST_LENGTH, STYLE_NONE,
+		"SHA3-256", SHA256_DIGEST_LENGTH, STYLE_BSD,
 		(op_init_t)bsdsum_sha3_256_begin,
 		(op_update_t)bsdsum_sha3_update,
 		(op_final_t)bsdsum_sha3_final,
 	},
 	{
-		"SHA3-512", SHA512_DIGEST_LENGTH, STYLE_NONE,
+		"SHA3-512", SHA512_DIGEST_LENGTH, STYLE_BSD,
 		(op_init_t)bsdsum_sha3_512_begin,
 		(op_update_t)bsdsum_sha3_update,
 		(op_final_t)bsdsum_sha3_final,
 	},
 	{
-		"WHIRLPOOL", WHIRLPOOL_DIGEST_LEN, STYLE_NONE,
+		"WHIRLPOOL", WHIRLPOOL_DIGEST_LEN, STYLE_BSD,
 		(op_init_t)rhash_whirlpool_init,
 		(op_update_t)rhash_whirlpool_update,
 		(op_final_t)rhash_whirlpool_final,
 	},
 	{
-		"BLAKE224", BLAKE224_DIGEST_LEN, STYLE_NONE,
+		"BLAKE224", BLAKE224_DIGEST_LEN, STYLE_BSD,
 		(op_init_t)blake224_init,
 		(op_update_t)blake224_update,
 		(op_final_t)blake224_final,
 	},
 	{
-		"BLAKE256", BLAKE256_DIGEST_LEN, STYLE_NONE,
+		"BLAKE256", BLAKE256_DIGEST_LEN, STYLE_BSD,
 		(op_init_t)blake256_init,
 		(op_update_t)blake256_update,
 		(op_final_t)blake256_final,
 	},
 	{
-		"BLAKE384", BLAKE384_DIGEST_LEN, STYLE_NONE,
+		"BLAKE384", BLAKE384_DIGEST_LEN, STYLE_BSD,
 		(op_init_t)blake384_init,
 		(op_update_t)blake384_update,
 		(op_final_t)blake384_final,
 	},
 	{
-		"BLAKE512", BLAKE512_DIGEST_LEN, STYLE_NONE,
+		"BLAKE512", BLAKE512_DIGEST_LEN, STYLE_BSD,
 		(op_init_t)blake512_init,
 		(op_update_t)blake512_update,
 		(op_final_t)blake512_final,
 	},
 	{
-		"BLAKE3", BLAKE3_OUT_LEN, STYLE_NONE,
+		"BLAKE3", BLAKE3_OUT_LEN, STYLE_BSD,
 		(op_init_t)blake3_hasher_init,
 		(op_update_t)blake3_hasher_update,
 		(op_final_t)blake3_final,
 	},
 	{
-		"BLAKE2B", BLAKE2B_OUTBYTES, STYLE_NONE,
+		"BLAKE2B", BLAKE2B_OUTBYTES, STYLE_BSD,
 		(op_init_t)blake2b_start,
 		(op_update_t)blake2b_update,
 		(op_final_t)blake2b_end,
 	},
 	{
-		"BLAKE2S", BLAKE2S_OUTBYTES, STYLE_NONE,
+		"BLAKE2S", BLAKE2S_OUTBYTES, STYLE_BSD,
 		(op_init_t)blake2s_start,
 		(op_update_t)blake2s_update,
 		(op_final_t)blake2s_end,
@@ -149,11 +149,12 @@ bsdsum_op_t* bsdsum_op_get (const char* name)
 	return NULL;
 }
 
-/* Parse one algorithm name 'cp'. Returns NULL on error.
- * 'base64' may be 1 to ensure the algorithm that is found supports
- * base64 encoding.
- */
-bsdsum_op_t* bsdsum_op_find_alg (const char *cp, int base64, int quiet)
+/* Parse one algorithm name 'cp'. Returns NULL on error. 
+ * If 'style' is not STYLE_NONE, check that the algorithm
+ * that was found supports this style of output. */
+bsdsum_op_t* bsdsum_op_find_alg (const char *cp, 
+					bsdsum_style_t style,
+					int quiet)
 {
 	bsdsum_op_t *hf;
 	char *p;
@@ -177,28 +178,42 @@ bsdsum_op_t* bsdsum_op_find_alg (const char *cp, int base64, int quiet)
 			warnx("unknown algorithm \"%s\"", cp);
 		return NULL;
 	}
-	if ((hf->style & STYLE_NOSPLIT) && l) {
+	if ((hf->use_style & STYLE_NOSPLIT) && l) {
 		if ( ! quiet)
 			warnx("algorithm \"%s\" does not support split", cp);
 		return NULL;
 	}
-	if (hf->base64 == -1 && base64 != 0) {
-		if ( ! quiet)
-			warnx("%s doesn't support base64-style output", hf->name);
-		return NULL;
+	if ((style != STYLE_NONE) && ! (hf->use_style & STYLE_FIXED)) {
+		if ((hf->use_style & style) != style) {
+			if ( ! quiet)
+				warnx("%s doesn't support given style", 
+					hf->name);
+			return NULL;
+		}
 	}
 	hf->split = (int) l;
 	return hf;
 }
 
-/* find the first function having STYLE_SPACE flag whose
- * output length is len */
+/* Returns true if the given style use a case sensitive
+ * comparison. */
+bool bsdsum_op_case_sensitive(bsdsum_style_t st)
+{
+	if (st & STYLE_B64)
+		return true;
+
+	return false;
+}
+
+/* find the first function having STYLE_GNU or STYLE_CKSUM flag 
+ * whose output length is 'len'. */
 bsdsum_op_t* bsdsum_op_for_length(size_t len)
 {
 	int i;
 
 	for (i = 0; bsdsum_ops[i].name; i++) {
-		if ( ! (bsdsum_ops[i].use_style & STYLE_SPACE))
+		if ( ! (bsdsum_ops[i].use_style & 
+				(STYLE_CKSUM | STYLE_GNU)))
 			continue;
 		if (len == bsdsum_ops[i].digestlen * 2)
 			return &bsdsum_ops[i];

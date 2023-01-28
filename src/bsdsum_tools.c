@@ -32,35 +32,3 @@ void explicit_bzero(void* p, size_t sz)
 		*q++ = 0;
 }
 
-
-/* read a line, max 1KB. Returns NULL only on error. */
-char* bsdsum_getline(int fd, int* eof, const char *filename)
-{
-	const int max = 1024;
-	char *l = calloc(1, max);
-	int n;
-	char c;
-
-	if (l == NULL)
-		errx(1, "out of memory");
-	*eof = 0;
-	for (n = 0; n < max; n++) {
-		switch (read(fd, &c, 1)) {
-		case 0:
-			*eof = 1;
-			return l;
-		case 1:
-			l[n] = c;
-			if (c == '\n')
-				return l;
-			break;
-		default:
-			warnx("I/O error reading %s", filename);
-			free(l);
-			return NULL;
-		}
-	}
-	free(l);
-	warnx("line too long in %s", filename);
-	return NULL;
-}

@@ -46,17 +46,17 @@ struct bsdsum_test {
 	const char* result3; /* alg */
 } tests[] = {
 	/* digests tests */
-	{ TEST_RESULT_STR, STYLE_DEFAULT, 
+	{ TEST_RESULT_STR, STYLE_TERSE, 
 		"MD5", "abc", 3, "900150983cd24fb0d6963f7d28e17f72", },
-	{ TEST_RESULT_STR, STYLE_DEFAULT, 
+	{ TEST_RESULT_STR, STYLE_TERSE, 
 		"SHA1", "abc", 3, "a9993e364706816aba3e25717850c26c9cd0d89d", },
-	{ TEST_RESULT_STR, STYLE_DEFAULT, 
+	{ TEST_RESULT_STR, STYLE_TERSE, 
 		"SHA256", "abc", 3, "ba7816bf8f01cfea414140de5dae2223b00"
 				"361a396177a9cb410ff61f20015ad", },
-	{ TEST_RESULT_STR, STYLE_DEFAULT, 
+	{ TEST_RESULT_STR, STYLE_TERSE, 
 		"SHA384", "0", 1, "5f91550edb03f0bb8917da57f0f8818976f5da971307b7"
 		"ee4886bb951c4891a1f16f840dae8f655aa5df718884ebc15b", },
-	{ TEST_RESULT_STR, STYLE_DEFAULT, 
+	{ TEST_RESULT_STR, STYLE_TERSE, 
 		"SHA512", "abc", 3, "ddaf35a193617abacc417349ae20413112e6fa4e89a"
 			"97ea20a9eeee64b55d39a2192992a274fc1a836ba3c"
 			"23a3feebbd454d4423643ce80e2a9ac94fa54ca49f", },
@@ -67,9 +67,9 @@ struct bsdsum_test {
 		"SHA3-512", "", 0, "0eab42de4c3ceb9235fc91acffe746b29c29a8c366b7"
 			"c60e4e67c466f36a4304c00fa9caf9d87976ba469bcbe"
 			"06713b435f091ef2769fb160cdab33d3670680e", },
-	{ TEST_RESULT_STR, STYLE_TERSE,  "SIZE", "", 0, "0", },
-	{ TEST_RESULT_STR, STYLE_TERSE,  "SIZE", "abc", 3, "3", },
-	{ TEST_RESULT_STR, STYLE_BASE64, 
+	{ TEST_RESULT_STR, STYLE_TXT,  "SIZE", "", 0, "0", },
+	{ TEST_RESULT_STR, STYLE_TXT,  "SIZE", "abc", 3, "3", },
+	{ TEST_RESULT_STR, STYLE_B64, 
 		"MD5", "abc", 3, "kAFQmDzST7DWlj99KOF/cg==", },
 	{ TEST_RESULT_STR, STYLE_TERSE, 
 		"WHIRLPOOL", "", 0, 
@@ -154,27 +154,29 @@ struct bsdsum_test {
 	{ TEST_PARSE, STYLE_NONE,  
 		"PARSE1", "", 0, NULL, NULL },
 	{ TEST_PARSE, STYLE_UNSUPPORTED,  
-		"PARSE2", 
-		"XXX (file) = abcdef", -1, NULL, NULL },
-	{ TEST_PARSE, STYLE_DEFAULT,  "PARSE3", 
+		"PARSE2",  "XXX (file) = abcdef", -1, NULL, NULL },
+	{ TEST_PARSE, STYLE_HEXA,  "PARSE3", 
 		"MD5 (file) = 0123456789abcdef0123456789abcdef", -1,
 		"0123456789abcdef0123456789abcdef", "file", "MD5" },
 	{ TEST_PARSE, STYLE_ERROR,  "PARSE4", 
 		"MD5 (file) = 123456789abcdef0123456789abcdef", -1,
 		"123456789abcdef0123456789abcdef", "file", "MD5" },
-	{ TEST_PARSE, STYLE_BASE64,  "PARSE5", 
+	{ TEST_PARSE, STYLE_B64,  "PARSE5", 
 		"MD5 (file) = kAFQmDzST7DWlj99KOF/cg==", -1,
 		"kAFQmDzST7DWlj99KOF/cg==", "file", "MD5" },
-	{ TEST_PARSE, STYLE_CKSUM,  "PARSE6",
+	{ TEST_PARSE, STYLE_ERROR,  "PARSE6", 
+		"MD5 (file) = !AFQmDzST7DWlj99KOF/cg==", -1,
+		"!AFQmDzST7DWlj99KOF/cg==", "file", "MD5" },
+	{ TEST_PARSE, STYLE_CKSUM,  "PARSE7",
 		"0123456789abcdef0123456789abcdef cksum", -1,
 		"0123456789abcdef0123456789abcdef", "cksum", "MD5" },
-	{ TEST_PARSE, STYLE_GNU,  "PARSE7",
+	{ TEST_PARSE, STYLE_GNU,  "PARSE8",
 		"0123456789abcdef0123456789abcdef01234567  gnu", -1,
 		"0123456789abcdef0123456789abcdef01234567", "gnu", "SHA1" },
-	{ TEST_PARSE, STYLE_BASE64,  "PARSE8", 
+	{ TEST_PARSE, STYLE_B64,  "PARSE9", 
 		"MD5:2 (file) = kAFQmDzST7DWlj99KOF/cg==", -1,
 		"kAFQmDzST7DWlj99KOF/cg==", "file", "MD5" },
-	{ TEST_PARSE, STYLE_TEXT,  "PARSE9", 
+	{ TEST_PARSE, STYLE_TXT,  "PARSE10", 
 		"SIZE (file) = 123456", -1,
 		"123456", "file", "SIZE" },
 	{ 0, 0, NULL, NULL, 0, NULL, }
@@ -242,7 +244,6 @@ static int bsdsum_test_md52() {
 	hf = bsdsum_op_get("MD5");
 	bsdsum_digest_init(hf, -1);
 	hf->style = STYLE_TERSE;
-	hf->base64 = 0;
 	if (bsdsum_digest_run(hf, &dummy, 0, 2))
 		return 1;
 	if (strcmp (hf->fdigest, m2))
@@ -274,10 +275,10 @@ void bsdsum_autotest(void)
 	{
 		if (tests[i].type == TEST_RESULT_HEX ||
 			tests[i].type == TEST_RESULT_STR) {
-			hf = bsdsum_op_find_alg (tests[i].name, 0, 1);
+			hf = bsdsum_op_find_alg (tests[i].name, 
+							tests[i].style, 1);
 			bsdsum_digest_init(hf, -1);
-			hf->style = tests[i].style | hf->use_style;
-			hf->base64 = (tests[i].style == STYLE_BASE64);
+			hf->style = tests[i].style;
 			if (tests[i].test_len >= 0)
 				len = tests[i].test_len;
 			else
@@ -304,8 +305,8 @@ void bsdsum_autotest(void)
 				! bsdsum_equ(filename, tests[i].result2) ||
 				! bsdsum_equ(dg, tests[i].result)) {
 				res = 1;	
-				fprintf(stderr, "%s: FAILED\n", tests[i].name);
-				fprintf(stderr, "  <%s><%s><%s>\n", 
+				fprintf(stderr, "* %s: FAILED\n", tests[i].name);
+				fprintf(stderr, "      <%s><%s><%s>\n", 
 					dg, filename,
 					hf ? hf->name : "-");
 			}

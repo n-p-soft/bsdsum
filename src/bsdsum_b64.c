@@ -303,3 +303,33 @@ int bsdsum_b64_pton (char const *src, unsigned char *target,
 
 	return (tarindex);
 }
+
+/* test if the given string is base64-encoded. 'dlen' is the
+ * decoded text length or 0. */
+bool bsdsum_b64_test (const char *s, size_t dlen)
+{
+
+	if (s == NULL)
+		return false;
+
+	if (dlen) {
+		size_t len, len2;
+
+		len = strlen(s);
+		if (s[len - 1] == '=') {
+			/* use padding */
+			len2 = 4 * ((dlen + 2) / 3);
+		} else {
+			/* no padding */
+			len2 = (4 * dlen + 2) / 3;
+		}
+		if (len != len2)
+			return false;
+	}
+	for ( ; *s; s++) {
+		if ((strchr(default_set, *s) == NULL) && (*s != '='))
+			return false;
+	}
+	return true;
+}
+
