@@ -46,7 +46,6 @@ static void bsdsum_init (bsdsum_t *bs)
 	memset(bs, 0, sizeof(bsdsum_t));
 	bs->length = -1;
 	bs->offset = -1;
-	bs->ofile = -1;
 }
 
 
@@ -88,57 +87,53 @@ static int bsdsum_count_op (bsdsum_t *bs)
 /* do the real stuff */
 static void bsdsum_run(bsdsum_t* bs)
 {
-	int i;
-
 	if (bs->selective_checklist) { /* -C */
-		int i;
-
-		bs->par = bsdsum_dgl_start(DGL_CMD_CHECK, -1,
+		bs->par = bsdsum_dgl_start(DGL_CMD_CHECK, bs->flags, -1,
 						bs->selective_checklist);
-		bs->par->sel_files = bs->argv;
-		bs->par->sel_count = bs->argc;
-		bs->par->sel_alg = bs->hl;
-		bs->res = bsdsum_dgl_process(bs->par);
-		bsdsum_dgl_end(&bs->par);
-		if (bs->res & DGL_RES_ERROR)
-			bs->error++;
+		bs->par->files = bs->argv;
+		bs->par->files_count = bs->argc;
+		bs->par->algs = bs->hl;
 	} 
-	else if (bs->cflag) { /* -c */
+	else if (bs->flags & FLAG_C) { /* -c */
 		if (bs->argc == 0) {
-			bs->par = bsdsum_dgl_start(DGL_CMD_CHECK, 0, NULL);
-			bs->par->sel_alg = bs->hl;
-			bs->res = bsdsum_dgl_process(bs->par);
-			bsdsum_dgl_end(&bs->par);
-			if (bs->res & DGL_RES_ERROR)
-				bs->error++;
+			bs->par = bsdsum_dgl_start(DGL_CMD_CHECK, bs->flags,
+							0, NULL);
+			bs->par->algs = bs->hl;
 		}
 		else {
 			while (bs->argc--) {
-				bs->par = bsdsum_dgl_start(DGL_CMD_CHECK, -1,
+				bs->par = bsdsum_dgl_start(DGL_CMD_CHECK, 
+								bs->flags, -1,
 								*bs->argv++);
-				bs->par->sel_alg = bs->hl;
-				bs->res = bsdsum_dgl_process(bs->par);
-				if (bs->res & DGL_RES_ERROR)
-					bs->error++;
-				bsdsum_dgl_end(&bs->par);
+				bs->par->algs = bs->hl;
 			}
 		}
 	} 
-	else  if (bs->pflag || bs->argc == 0) /* -p or digest stdin */
-		bs->error = bsdsum_digest_file(bs->ofile, bs->hl, "-", bs->pflag,
-						-1, -1);
-	else { /* digest files */
-		for (i = 0; i < bs->argc; i++) 
-			bs->error += bsdsum_digest_file(bs->ofile,
-						bs->hl, bs->argv[i], 0,
-						bs->offset, bs->length);
+	else  if ((bs->flags & FLAG_P) || bs->argc == 0) { 
+		/* -p or digest stdin */
+		bs->par = bsdsum_dgl_start(DGL_CMD_HASH_STDIN, 
+					bs->flags,
+					bs->opath ? -1 : 1, bs->opath);
+		bs->par->algs = bs->hl;
 	}
+	else { 
+		/* digest files */
+		bs->par = bsdsum_dgl_start(DGL_CMD_HASH, bs->flags,
+					bs->opath ? -1 : 1, bs->opath);
+		bs->par->files = bs->argv;
+		bs->par->files_count = bs->argc;
+		bs->par->algs = bs->hl;
+	}
+	bs->res = bsdsum_dgl_process(bs->par);
+	bsdsum_dgl_end(&bs->par);
+	if (bs->res & DGL_RES_ERROR)
+		bs->error++;
 }
 
 /* check the configuration and adjust parameters */
 static void bsdsum_setup(bsdsum_t* bs, int argc, char **argv)
 {
-	int fl;
+	int fl = 0;
 
 	/* remaining arguments are files to digest or list of digests 
 	 * to check. */
@@ -148,39 +143,38 @@ static void bsdsum_setup(bsdsum_t* bs, int argc, char **argv)
 	/* Most arguments are mutually exclusive */
 	if ((bs->argc != 1) && (bs->length >= 0 || bs->offset >= 0))
 		errx(1, "one file (and only one) must be specified with -f/-l");
-	fl = bs->pflag + bs->cflag;
-	if (fl > 1 || (fl && bs->argc && bs->cflag == 0) || 
-	    (bs->selective_checklist != NULL && bs->argc == 0))
-		errx(1, "non-compatible options on command-line");
-	if (bs->selective_checklist && bs->cflag)
-		errx(1, "-C and -c are exclusive");
-	if (bs->selective_checklist || bs->cflag) {
+	if (bs->selective_checklist != NULL && bs->argc == 0)
+		errx(1, "missing selection of files to check");
+	if ((bs->flags & FLAG_C) && bs->argc == 0)
+		errx(1, "missing list(s) of digests to check");
+	if ((bs->flags & FLAG_R) && 
+		(bs->flags & (FLAG_C | FLAG_CSEL | FLAG_P)))
+		errx(1, "non-compatible option -r on command-line");
+	if (bs->flags & FLAG_C)
+		fl++;
+	if (bs->flags & FLAG_P)
+		fl++;
+	if (bs->flags & FLAG_CSEL)
+		fl++;
+	if (fl > 1) 
+		errx(1, "-p, -C and -c are exclusive");
+	if (bs->selective_checklist || (bs->flags & FLAG_C)) {
 		if (bsdsum_count_op(bs) > 1)
 			errx(1, "only one algorithm may be specified "
 			    "in -C or -c mode");
 	}
 
 	/* default alg and style */
-	if ((bsdsum_count_op(bs) == 0) && ! bs->cflag && 
+	if ((bsdsum_count_op(bs) == 0) && ! (bs->flags & FLAG_C) && 
 		! bs->selective_checklist) {
 		bsdsum_add_op(bs, bsdsum_op_get("SHA256"), bs->style);
 	}
 
 	/* split mode constrainsts */
-	if (bs->use_split) {
-		if (bs->pflag || bs->argc == 0)
+	if (bs->flags & FLAG_SPLIT) {
+		if ((bs->flags & FLAG_P) || bs->argc == 0)
 			errx(1, "split digest not usable on stdin");
 	}
-
-	/* open -o path */
-	if (bs->opath) {
-		bs->ofile = open(bs->opath, O_WRONLY|O_CREAT|O_APPEND,
-					0600);
-		if (bs->ofile < 0)
-			errx(1, "could not open %s", bs->opath);
-	}
-	else /* stdout */
-		bs->ofile = 1;
 }
 
 
@@ -189,7 +183,7 @@ static void bsdsum_parse(bsdsum_t* bs, int argc, char** argv)
 {
 	bsdsum_op_t *hf, *hftmp;
 	char *cp;
-	const char *optstr = "a:C:co:hpts:f:l:";
+	const char *optstr = "a:C:co:hprts:f:l:";
 	char* endptr;
 	int i, fl;
 	int a_opts = 0;
@@ -256,7 +250,7 @@ static void bsdsum_parse(bsdsum_t* bs, int argc, char** argv)
 						       " style");
 				hf = bsdsum_add_op(bs, hf, bs->style);
 				if (hf->split >= 2)
-					bs->use_split = 1;
+					bs->flags |= FLAG_SPLIT;
 			}
 			break;
 		case 'o':
@@ -266,13 +260,17 @@ static void bsdsum_parse(bsdsum_t* bs, int argc, char** argv)
 			bs->selective_checklist = optarg;
 			break;
 		case 'c':
-			bs->cflag = 1;
+			bs->flags |= FLAG_C;
 			break;
 		case 'p':
-			bs->pflag = 1;
+			bs->flags |= FLAG_P;
 			break;
 		case 't':
+			bs->flags |= FLAG_T;
 			bsdsum_autotest();
+			break;
+		case 'r':
+			bs->flags |= FLAG_R;
 			break;
 		case 'f':
 		case 'l':
@@ -290,8 +288,6 @@ static void bsdsum_parse(bsdsum_t* bs, int argc, char** argv)
 
 static void bsdsum_end(bsdsum_t* bs)
 {
-	if (bs->opath)
-		close(bs->ofile);
 }
 
 int main (int argc, char **argv)

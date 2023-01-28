@@ -108,10 +108,23 @@ typedef union bsdsum_ctx {
 	blake2s_state blake2s;
 } bsdsum_ctx_t;
 
+/* Various flags */
+typedef enum {
+	FLAG_NONE = 0,
+	FLAG_CSEL = 2, 		/* -C */
+	FLAG_C = 4,		/* -c */
+	FLAG_P = 8,		/* -p */
+	FLAG_R = 0x10,		/* -r */
+	FLAG_T = 0x20,		/* -t */
+	FLAG_SPLIT = 0x40,	/* using split */
+} bsdsum_flag_t;
+
 /* Operation to run on a list of digests */
 typedef enum {
 	DGL_CMD_NONE = 0,
 	DGL_CMD_CHECK, /* verify the digests */
+	DGL_CMD_HASH, /* digest files */
+	DGL_CMD_HASH_STDIN, /* digest stdin */
 } bsdsum_dgl_cmd_t;
 
 /* Result codes for dgl_process */
@@ -138,26 +151,22 @@ typedef struct {
 	int l_empty; /* count of empty lines */
 	int l_ok; /* count of lines processed OK */
 	int lineno; /* current line number */
-
-	/* parameters for CHECK */
-	bsdsum_op_t* sel_alg; /* alg selected when checking or NULL */
-	char **sel_files; /* only check these files if not NULL */
-	int sel_count; /* count of items in sel_files */
-	int *sel_found; /* 1 for each item of sel_files found */
+	bsdsum_op_t* algs; /* alg(s) selected or NULL */
+	char **files; /* file selection if not NULL */
+	int files_count; /* count of items in 'files' */
+	int *files_found; /* 1 for each item of 'files' found */
+	bsdsum_flag_t flags; /* various flags */
 } bsdsum_dgl_par_t;
 
 /* program global data */
 typedef struct {
 	int argc;
 	char **argv;
-	int use_split;
-	int cflag;
-	int pflag;
+	bsdsum_flag_t flags;
 	bsdsum_style_t style;
 	long length;
 	long offset;
 	const char *opath; /* -o path */
-	int ofile; /* -o associated file descriptor */
 	bsdsum_op_t *hl;
 	char *selective_checklist;
 	bsdsum_dgl_par_t *par;
@@ -210,6 +219,7 @@ void bsdsum_digest_print(int, const bsdsum_op_t *,
 				const char *);
 
 bsdsum_dgl_par_t* bsdsum_dgl_start(bsdsum_dgl_cmd_t cmd,
+					bsdsum_flag_t flags,
 					int listfd, const char *path);
 
 void bsdsum_dgl_end(bsdsum_dgl_par_t**);

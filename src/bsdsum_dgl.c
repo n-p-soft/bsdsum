@@ -70,6 +70,7 @@ static char* bsdsum_dgl_getline(int fd, int* eof, const char *filename)
  * disable it).
  */
 bsdsum_dgl_par_t *bsdsum_dgl_start(bsdsum_dgl_cmd_t cmd,
+					bsdsum_flag_t flags,
 					int listfd, const char *path)
 {
 	bsdsum_dgl_par_t* par;
@@ -82,6 +83,7 @@ bsdsum_dgl_par_t *bsdsum_dgl_start(bsdsum_dgl_cmd_t cmd,
 		err(1, NULL);
 
 	par->cmd = cmd;
+	par->flags = flags;
 	if (path) {
 		par->path = path;
 		par->listfd = -1;
@@ -98,8 +100,8 @@ void bsdsum_dgl_end(bsdsum_dgl_par_t** par)
 	if ( ! par || ! *par)
 		return;
 
-	if ((*par)->sel_found)
-		free((*par)->sel_found);
+	if ((*par)->files_found)
+		free((*par)->files_found);
 
 	free(*par);
 	*par = NULL;
@@ -139,20 +141,20 @@ static bsdsum_dgl_res_t bsdsum_dgl_check_line(bsdsum_dgl_par_t *par,
 		par->l_empty++;
 		return DGL_RES_CONTINUE;
 	}
-	else if (par->sel_alg && hf != par->sel_alg) {
+	else if (par->algs && hf != par->algs) {
 		par->l_skipped++;	
 		return DGL_RES_CONTINUE;
 	}
 
 	/* filter-out some files */
-	if (par->sel_files != NULL) {
-		for (i = 0; i < par->sel_count; i++) {
-			if (strcmp(par->sel_files[i], filename) == 0) {
-				par->sel_found[i] = 1;
+	if (par->files != NULL) {
+		for (i = 0; i < par->files_count; i++) {
+			if (strcmp(par->files[i], filename) == 0) {
+				par->files_found[i] = 1;
 				break;
 			}
 		}
-		if (i == par->sel_count)
+		if (i == par->files_count)
 			return DGL_RES_CONTINUE;
 	}
 
@@ -187,54 +189,18 @@ static bsdsum_dgl_res_t bsdsum_dgl_check_line(bsdsum_dgl_par_t *par,
 	}
 }
 
-/* Process all lines of the list of digests 'file'. */
-bsdsum_dgl_res_t bsdsum_dgl_process (bsdsum_dgl_par_t *par)
+typedef bsdsum_dgl_res_t (*bsdsum_dgl_cb_t) (bsdsum_dgl_par_t* par,
+						char *line);
+
+/* process each line using callback 'cb'. */
+static bsdsum_dgl_res_t bsdsum_dgl_read(bsdsum_dgl_par_t *par,
+					bsdsum_dgl_cb_t cb)
 {
-	bsdsum_dgl_res_t res = DGL_RES_OK;
-	bsdsum_dgl_res_t lres;
-	int fd = -1;
 	int eof = 0;
 	char *line;
+	bsdsum_dgl_res_t res = DGL_RES_OK;
+	bsdsum_dgl_res_t lres;
 
-	/* open the list */
-	if (par == NULL) {
-		warnx("missing parameters");
-		return DGL_RES_ERR_PAR;
-	}	
-	else if (par->listfd < 0) {
-		if (strcmp(par->path, "-") == 0) {
-			par->listfd = 0;
-			par->std = 1;
-		} else if (par->path == NULL) {
-			warnx("missing list path");
-			return DGL_RES_ERR_PAR;
-		} else {
-			par->listfd = open(par->path, O_RDONLY);
-			if (par->listfd < 0) {
-				warn("cannot open %s", par->path);
-				return DGL_RES_ERR_IO;
-			}
-		}
-	}
-	else
-		fd = par->listfd;
-
-	par->l_error = 0;
-	par->l_syntax = 0;
-	par->l_comment = 0;
-	par->l_error = 0;
-	par->l_empty = 0;
-	par->l_ok = 0;
-	par->lineno = 0;
-
-	/* init for CHECK */
-	if (par->sel_files != NULL) {
-		par->sel_found = calloc((size_t)par->sel_count, sizeof(int));
-		if (par->sel_found == NULL)
-			err(1, NULL);
-	}
-
-	/* process each line */
 	while(eof == 0) {
 		line = bsdsum_dgl_getline(par->listfd, &eof, par->path);
 		if (eof && ( ! line || ! *line))
@@ -252,16 +218,137 @@ bsdsum_dgl_res_t bsdsum_dgl_process (bsdsum_dgl_par_t *par)
 			par->l_comment++;
 			continue;
 		}
-		switch(par->cmd) {
-			case DGL_CMD_CHECK:
-				lres = bsdsum_dgl_check_line(par, line);
-				break;
-			default:
-				lres = DGL_RES_BREAK;
-				res = DGL_RES_ERR_PAR;
-				break;
-		}
+		lres = cb(par, line);
+		if (lres & DGL_RES_ERROR)
+			res |= DGL_RES_ERROR;
 		if (lres & DGL_RES_BREAK)
+			break;
+	}
+
+	if (par->l_error)
+		res |= DGL_RES_ERROR;
+
+	return res;
+}
+
+/* Hash par->files. */
+static bsdsum_dgl_res_t bsdsum_dgl_hash(bsdsum_dgl_par_t *par)
+{
+	bsdsum_dgl_res_t res = DGL_RES_OK;
+	int i;
+	struct stat st;
+
+	for (i = 0; i < par->files_count; i++) {
+		if (stat(par->files[i], &st)) {
+			res = DGL_RES_ERROR;
+			warnx("unable to stat file %s\n",
+					par->files[i]);
+			continue;
+		}
+		switch(st.st_mode & S_IFMT) {
+		case S_IFREG:
+			if (bsdsum_digest_file(par->listfd,
+					par->algs, par->files[i],
+					(par->flags & FLAG_P) ? 1 : 0,
+					-1, -1))
+				par->l_error++;
+			break;
+		case S_IFDIR:
+			/* TODO: if (par->flags & FLAG_R) {
+			}
+			else */ {
+				warnx("skipping directory %s",
+					par->files[i]);
+				par->l_skipped++;
+			}
+			break;
+		case S_IFBLK:
+		case S_IFCHR:
+		case S_IFIFO:
+		case S_IFLNK:
+		case S_IFSOCK:
+			warnx("unsupported file type %s",
+					par->files[i]);
+			par->l_skipped++;
+			break;
+		}
+	}
+}
+
+/* Process some DGL_CMD. */
+bsdsum_dgl_res_t bsdsum_dgl_process(bsdsum_dgl_par_t *par)
+{
+	bsdsum_dgl_res_t res = DGL_RES_OK;
+	bsdsum_dgl_res_t lres;
+	int fd = -1;
+	int fflags;
+
+	if (par == NULL) {
+		warnx("missing parameters");
+		return DGL_RES_ERR_PAR;
+	}	
+
+	/* open the digests list (input) or the output */
+	if (par->cmd == DGL_CMD_HASH)
+		fflags = O_CREAT|O_APPEND|O_WRONLY;
+	else
+		fflags = O_RDONLY;
+
+	if (par->listfd < 0) {
+		if (strcmp(par->path, "-") == 0) {
+			par->listfd = 0;
+			par->std = 1;
+		} else if (par->path == NULL) {
+			warnx("missing target path");
+			return DGL_RES_ERR_PAR;
+		} else {
+			par->listfd = open(par->path, fflags);
+			if (par->listfd < 0) {
+				warn("cannot open %s", par->path);
+				return DGL_RES_ERR_IO;
+			}
+		}
+	}
+	else
+		fd = par->listfd;
+
+	par->l_error = 0;
+	par->l_syntax = 0;
+	par->l_comment = 0;
+	par->l_empty = 0;
+	par->l_ok = 0;
+	par->lineno = 0;
+
+	/* initialize the found flag list */
+	if ((par->cmd == DGL_CMD_CHECK) && (par->files != NULL)) {
+		par->files_found = calloc((size_t)par->files_count, 
+						sizeof(int));
+		if (par->files_found == NULL)
+			err(1, NULL);
+	}
+
+	/* run the command */
+	switch(par->cmd) {
+		case DGL_CMD_CHECK:
+			/* check the digests in the list, possibly using
+			 * the selector par->files. */
+			res = bsdsum_dgl_read(par,
+						bsdsum_dgl_check_line);
+			break;
+		case DGL_CMD_HASH:
+			/* compute the digests of par->files and output
+			 * to par->listfd. */
+			res = bsdsum_dgl_hash(par);
+			break;
+		case DGL_CMD_HASH_STDIN:
+			if (bsdsum_digest_file(par->listfd, par->algs,
+					"-",
+					(par->flags & FLAG_P) ? 1 : 0,
+					-1, -1))
+				res = DGL_RES_ERROR;
+			break;
+		default:
+			res = DGL_RES_ERR_PAR;
 			break;
 	}
 
@@ -273,26 +360,32 @@ bsdsum_dgl_res_t bsdsum_dgl_process (bsdsum_dgl_par_t *par)
 	}
 
 	if (par->l_skipped) {
-		warnx("%s: %i line(s) skipped", par->path, par->l_skipped);
+		if (par->path)
+			warnx("%s: %i item(s) skipped", 
+					par->path, par->l_skipped);
+		else
+			warnx("%i item(s) skipped", 
+				par->l_skipped);
 	}
 	if (par->l_syntax) {
-		warnx("%s: found %i ill-formatted line(s)", 
-				par->path, par->l_syntax);
+		if (par->path)
+			warnx("%s: found %i ill-formatted line(s)", 
+					par->path, par->l_syntax);
+		else
+			warnx("found %i ill-formatted line(s)", 
+					par->l_syntax);
 		/* force one error for these lines */
 		res |= DGL_RES_ERROR;
 	}
-	if (par->l_error)
-		res |= DGL_RES_ERROR;
 
-	/* CHECK end: raise an error if some selected files were not
-	 * encountered. */
-	if (par->sel_files) {
+	/* raise an error if some selected files were not encountered. */
+	if (par->files_found) {
 		int i;
 
-		for (i = 0; i < par->sel_count; i++) {
-			if (par->sel_found[i] == 0) {
+		for (i = 0; i < par->files_count; i++) {
+			if (par->files_found[i] == 0) {
 				warnx("%s was not found",
-					par->sel_files[i]);
+					par->files[i]);
 				res |= DGL_RES_ERROR;
 			}
 		}
