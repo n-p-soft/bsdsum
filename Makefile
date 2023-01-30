@@ -96,8 +96,7 @@ clean:
 
 .PHONY: check
 check: out/bsdsum
-	@out/bsdsum -t || exit 1
-	@echo "* FILELIST1"; cd tests; ../out/bsdsum -c sums || exit 1
-	@echo "* FILELIST2"; cd tests; ../out/bsdsum -c sums0 || exit 1
-	@echo "* FILELIST3"; cd tests; ../out/bsdsum -C sums a || exit 1
+	@$(MAKE) -C tests || exit 1
+
+
 

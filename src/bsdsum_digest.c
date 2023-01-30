@@ -32,6 +32,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <signal.h>
+#include <dirent.h>
 
 #include "bsdsum.h"
 
@@ -120,51 +121,117 @@ void bsdsum_digest_print (int ofile, const bsdsum_op_t *hf,
 		(void)dprintf(ofile, "%s  %s\n", hf->fdigest, what);
 }
 
-/* compute one digest for (buf,length) and operator 'hf'. */
-int bsdsum_digest_run (bsdsum_op_t *hf,
-			unsigned char* buf, long length,
-			int split)
+
+/* read from 'fd' 'length' bytes starting at 'offset' and
+ * process this data with 'hf': this algorithm only if
+ * 'first_only' is true, else the list starting at 'hf',
+ * selecting only non-split digests if 'nosplit_only' is true.
+ * Assume that 'fd', 'offset', 'length' are valid.
+ */
+static bsdsum_res_t bsdsum_digest_read(int fd, bsdsum_op_t *hf,
+					bool first_only,
+					bool nosplit_only,
+					long offset, long length)
 {
-	int i, status, nchilds, allok;
+	ssize_t rd;
+	long len;
+	bsdsum_op_t* o;
+	static unsigned char *readbuf = NULL;
+
+	if (readbuf == NULL) {
+		readbuf = malloc(BUFFER_RAW_SZK*1024);
+		if (readbuf == NULL)
+			err(1, NULL);
+	}
+
+	if (lseek(fd, offset, SEEK_SET) != offset) {
+		warnx("could not seek");
+		return RES_ERROR;
+	}
+
+	while(length > 0) {
+		len = (length < BUFFER_RAW_SZK*1024) ? 
+			length : BUFFER_RAW_SZK*1024;
+		rd = read(fd, readbuf, len);
+		if (rd <= 0) {
+			close(fd);
+			warnx("could not read file");
+			return RES_ERROR;
+		}
+		for (o = hf; o; o = o->next) {
+			if (nosplit_only && (o->split > 1))
+				continue;	
+			o->update(o->ctx, readbuf, len);
+			if (first_only)
+			       break;
+		}
+		length -= len;
+	}
+	return RES_OK;
+}
+
+/* compute split-digest for ONE algorithm 'hf', using as data
+ * source either 'file', if non-NULL, else 'buf'. 'offset' and
+ * 'length' must be valid. 
+ */
+static bsdsum_res_t bsdsum_digest_split(bsdsum_op_t *hf,
+					const char* file,
+					unsigned char *buf,
+					long offset, long length)
+{
+	int fd, i, status, nchilds, allok;
 	size_t slen;
-	long off = 0;
+	long off = offset;
 	int fds[MAX_SPLIT];
 	pid_t pids[MAX_SPLIT];
 	unsigned char *cdg;
 	char tmp[MAX_SPLIT][20];
 	pid_t r;
+	bsdsum_res_t res = RES_OK;
 
-	//printf("%i %p %li %i\n", getpid(), buf, length, split);
-	if (split < 2) {
-		bsdsum_digest_init(hf, -1);
-		hf->update(hf->ctx, buf, length);
-		bsdsum_digest_end(hf);
-		return(0);
-	}
-
-	/* split digest */
 	cdg = calloc(hf->split, hf->digestlen);
 	if (cdg == NULL)
 		errx(1, "out of memory");
 	for (i = 0; i < hf->split; i++) {
 		snprintf(tmp[i], 20, "/tmp/bsdsumXXXXXX");
 		fds[i] = mkstemp(tmp[i]);
-		if (fds[i] < 0)
-			err(1, "cannot create temporary file");
+		if (fds[i] < 0) {
+			warnx("could not create temporary file");
+			return RES_ERROR;
+		}
 	}
 	signal(SIGCHLD, SIG_DFL);
-	slen = length / split;
+	slen = length / hf->split;
 	for (i = 0; i < hf->split; i++) {
 		if (i == hf->split - 1)
 			slen = length;
 		else
 			length -= slen;
 		pids[i] = fork();
-		if (pids[i] < 0) 
-			errx(1, "could not fork");
-		else if (pids[i] == 0) {
-			if (bsdsum_digest_run(hf, buf + off, slen, 0))
-				exit(1);
+		if (pids[i] < 0) {
+			warnx("could not fork");
+			res = RES_ERROR;
+			break;
+		}
+		else if (pids[i] == 0) { /* child */
+			if (buf) {
+				if (bsdsum_digest_mem(hf, buf + off, 
+							slen, 0) != RES_OK)
+					exit(1);
+			}
+			else {
+				fd = open(file, O_RDONLY);
+				if (fd < 0) {
+					warnx("could not open %s", file);
+					exit(1);
+				}
+				if (bsdsum_digest_read(fd, hf, true, false,
+							off, slen) != RES_OK) {
+					close(fd);
+					exit(1);
+				}
+				close(fd);
+			}
 			if (write(fds[i], hf->digest, hf->digestlen) !=
 							hf->digestlen)
 				exit(1);
@@ -194,115 +261,278 @@ int bsdsum_digest_run (bsdsum_op_t *hf,
 		if (pids[i] != -1)
 			kill(pids[i], SIGKILL);
 	}
-	if ( ! allok)
-		errx(1, "split digest failure");
+	if ( ! allok) {
+		warnx("split digest failure");
+		res = RES_ERROR;
+	}
 	for (i = 0; i < hf->split; i++) {
 		if ((lseek(fds[i], 0, SEEK_SET) != 0) ||
 			(read(fds[i], cdg+i*hf->digestlen, hf->digestlen) !=
-						hf->digestlen))
-			errx(1, "unable to read split-digest results");
+						hf->digestlen)) {
+			warnx("unable to read split-digest results");
+			res = RES_ERROR;
+		}
 		close(fds[i]);
 		unlink(tmp[i]);
 	}
-	bsdsum_digest_run(hf, cdg, hf->digestlen * hf->split, 0);
+	if (res == RES_OK) 
+		res = bsdsum_digest_mem(hf, cdg, 
+					hf->digestlen * hf->split, 0);
 	free(cdg);
-	return(0);
+	return res;
 }
 
-/* Try to mmap given file and digest it. 
- * The function returns errno on error, or 0 on success, or
- * does not return on erroneous offset/length parameters.
- * offset/length set to -1 are ignored.
+/* Compute all digests for the list 'hf', reading directly 'file'.
+ * We assume that 'offset' and 'length' have been checked before and
+ * are valid.
  */
-int bsdsum_digest_mmap_file (const char *file,
-				bsdsum_op_t *hf,
-				long offset, long length)
+static bsdsum_res_t bsdsum_digest_file(const char* file, 
+					bsdsum_op_t* hf,
+					long offset, long length)
+{
+	int fd;
+	bsdsum_op_t *o;
+	ssize_t rd;
+	long len, savlen;
+       
+	fd = open(file, O_RDONLY);
+	if (fd < 0) {
+		warnx("could not open %s", file);
+		return RES_ERROR;
+	}
+
+	for (o = hf; o; o = o->next)
+		bsdsum_digest_init(o, -1);
+
+	/* first, run all non-split digests: this avoids reading
+	 * the file many times. */
+	savlen = length;
+	if (bsdsum_digest_read(fd, hf, false, true,
+				offset, length) != RES_OK) {
+		close(fd);
+		return RES_ERROR;
+	}
+	close(fd);
+
+	/* for split-digests we must re-read the file for each algorithm */
+	for (o = hf; o; o = o->next) {
+		if (o->split <= 1)
+			continue;
+		if (bsdsum_digest_split(hf, file, NULL, offset, length) !=
+				RES_OK)
+			return RES_ERROR;
+	}
+
+	for (o = hf; o; o = o->next)
+		bsdsum_digest_end(o);
+
+	return RES_OK;
+}
+
+/* compute ONE digest 'hf' for (buf,length) in memory.
+ * 'offset' and 'length' must be valid. The 'split' value will
+ * override hf->split.
+ * If RES_OK is returned then hf->digest and hf->fdigest are set. */
+bsdsum_res_t bsdsum_digest_mem (bsdsum_op_t *hf, 
+				unsigned char* buf, long length,
+				int split)
+{
+	bsdsum_res_t res = RES_OK;
+
+	//printf("%i %p %li %i\n", getpid(), buf, length, split);
+	if (split < 2) {
+		bsdsum_digest_init(hf, -1);
+		hf->update(hf->ctx, buf, length);
+		bsdsum_digest_end(hf);
+		return RES_OK;
+	}
+	else
+		return bsdsum_digest_split(hf, NULL, buf, 0, length);
+}
+
+/* Hash a file, using mmap (fallback to buffered read if not possible),
+ * for all operators in list 'hf'.  
+ * 'stsrc' can be provided for 'file' or be NULL to stat it now.
+ * 'offset'/'length' set to -1 are ignored.
+ */
+static bsdsum_res_t bsdsum_digest_reg (const char *file,
+					struct stat *stsrc,
+					bsdsum_op_t *hf,
+					long offset, long length,
+					bsdsum_flag_t flags)
 {
 	struct stat st;
+	struct stat *pst = &st;
 	void *base;
 	size_t len;
-	int e, f;
+	int f;
 	int r = 0;
 	bsdsum_op_t *o;
 
 	//printf("%s %i %i\n", file, offset, length);
-	f = open(file, O_RDONLY);
-	e = errno;
-	if (f < 0) {
-		close(f);
-		return e;
-	}
-	if (fstat(f, &st)) {
-		e = errno;
-		close(f);
-		return e;
+	if (stsrc)
+		pst = stsrc;
+	else if (stat(file, &st)) {
+		warnx("cannot stat file %s", file);
+		return RES_ERROR;
 	}
 
-	/* cannot mmap a file of size zero */
-	if (st.st_size == 0) {
+	if (offset < 0) 
+		offset = 0;
+	else if (offset >= pst->st_size) {
+		warnx("bad offset specified");
+		return RES_ERROR;
+	}
+	if (length < 0) 
+		length = pst->st_size - offset;
+	else if (length > pst->st_size) {
+		warnx("bad length specified");
+		return RES_ERROR;
+	}
+	if (offset + length > pst->st_size) {
+		warnx("bad offset/length specified");
+		return RES_ERROR;
+	}
+
+	/* special case for length == 0 */
+	if (length == 0) {
 		unsigned char dummy = 0;
 	
-		close(f);
 		for (o = hf; o; o = o->next) 
-			r |= bsdsum_digest_run(o, &dummy, 0, o->split);
+			r |= bsdsum_digest_mem(o, &dummy, 0, o->split);
 		return(r);
 	}
 
-	base = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, f, 0);
-	if (base == (void*)-1) {
-		e = errno;
+	/* non-empty area to hash, open the target */
+	f = open(file, O_RDONLY);
+	if (f < 0) {
+		warnx("cannot open file %s", file);
 		close(f);
-		return e;
-	}
-	else if (offset <= 0) {
-		offset = 0;
-		len = (length >= 0) ? length : st.st_size;
-		if (len > st.st_size)
-			errx(1, "bad length specified");
-	}
-	else {
-		if (length < 0) {
-			if (offset > st.st_size)
-				errx(1, "bad offset specified");
-			len = st.st_size - offset;
-		}
-		else {
-			if (offset + length > st.st_size)
-				errx(1, "bad offset/length specified");
-			len = length;
-		}
+		return RES_ERROR;
 	}
 
-	for (o = hf; o; o = o->next) 
-		r |= bsdsum_digest_run(o, base + offset, len, o->split);
-	munmap(base, st.st_size);
+	if ( ! (flags & FLAG_RAW))
+	       	base = mmap(NULL, pst->st_size, PROT_READ,
+				MAP_PRIVATE, f, 0); 
+	else
+		base = (void*)(-1);
+
+	if (base == (void*)(-1)) {  
+		/* could not mmap, or FLAG_RAW, read it */
+		close(f); 
+		return bsdsum_digest_file(file, hf, offset, length);
+	}
+
+	/* apply algorithms */
+	for (o = hf; o; o = o->next) {
+		r |= bsdsum_digest_mem(o, base + offset, 
+					length, o->split);
+	}
+
+	if (base)
+		munmap(base, pst->st_size);
 	close(f);
-	return(r);
+	if (r) {
+		warnx("could not digest file %s", file);
+		return RES_ERROR;
+	}
+
+	return RES_OK;
 }
 
-/* Digest one file using algorithms 'ops' and output the result into file
- * 'ofile'.
+/* Hash a link */
+static bsdsum_res_t bsdsum_digest_lnk(int ofile,
+					bsdsum_op_t *ops, 
+					const char *file, 
+					bsdsum_flag_t flags)
+{
+	char rlnk[PATH_MAX+1];
+
+	if (readlink(file, rlnk, MAX_PATH) < 0) {
+		warnx("could not read link %s", file);
+		return RES_ERROR;
+	}
+
+	return bsdsum_digest_one(ofile, ops, rlnk,
+				 flags, -1, -1);
+}
+
+static char rpath[PATH_MAX+1];
+
+/* Recursive hashing of a directory. */
+static bsdsum_res_t bsdsum_digest_dir(int ofile,
+					bsdsum_op_t *ops, 
+					const char *dir, 
+					bsdsum_flag_t flags)
+{
+	DIR *d;
+	struct dirent *dr;
+	bsdsum_res_t res = RES_OK;
+	bsdsum_res_t lres;
+
+	d = opendir(dir);
+	if (d == NULL) {
+		warnx("unable to access directory %s\n", dir);
+		return RES_ERROR;
+	}
+	while(1) {
+		lres = RES_OK;
+		errno = 0;
+		dr = readdir(d);
+		if (dr == NULL) {
+			closedir(d);
+			if (errno != 0) {
+				warnx("directory access error (%s)\n", dir);
+				return RES_ERROR;
+			}
+			return res;
+		}
+		if (dr->d_name[0] == '.') {
+			if (dr->d_name[1] == '\0' ||
+				(dr->d_name[1] == '.' &&
+				 dr->d_name[2] == '\0'))
+			 continue;
+		}
+		if (strlen(dir)+strlen(dr->d_name) >= MAX_PATH) {
+			warnx("too long path (%s, %s)", dir, dr->d_name);
+			closedir(d);
+			return RES_ERROR;
+		}
+		snprintf(rpath, MAX_PATH, "%s/%s", dir, dr->d_name); 
+		lres = bsdsum_digest_one(ofile, ops, rpath, flags,
+						-1, -1);
+		if (lres & RES_ERROR)
+			res = RES_ERROR;
+	}
+	return res;
+}
+
+/* Digest 'file' using algorithms 'ops' and output the results into file
+ * 'ofile'. Returns RES_OK, RES_ERROR, RES_SKIPPED.
  */
-int bsdsum_digest_file (int ofile, bsdsum_op_t* ops, 
-			const char *file, int echo,
-			long offset, long length)
+bsdsum_res_t bsdsum_digest_one (int ofile, bsdsum_op_t* ops, 
+				const char *file, bsdsum_flag_t flags,
+				long offset, long length)
 {
 	bsdsum_op_t *hf;
+	bsdsum_res_t res;
 	size_t nread;
 	int std = 0;
 	int error;
-	unsigned char data[BUFFER_SZK*1024];
+	struct stat st;
 
 	if (strcmp(file, "-") == 0)
 		std = 1;
 
 	/* process all data */
 	if (std) {
+		unsigned char data[BUFFER_STDIN_SZK*1024];
+
 		for (hf = ops; hf; hf = hf->next) 
 			bsdsum_digest_init(hf, -1);
 		while ((nread = fread(data, 1UL, 
-					BUFFER_SZK*1024, stdin)) != 0) {
-			if (echo) {
+					BUFFER_STDIN_SZK*1024, stdin)) != 0) {
+			if (flags & FLAG_P) {
 				(void)fwrite(data, nread, 1UL, stdout);
 				if (fflush(stdout) != 0)
 					err(1, "stdout: write error");
@@ -316,19 +546,50 @@ int bsdsum_digest_file (int ofile, bsdsum_op_t* ops,
 			bsdsum_digest_end(hf);
 	}
 	else {
-		error = bsdsum_digest_mmap_file(file, ops, 
-						offset, length);
-		if (error)
-			err(error, "could not digest file %s", file);
+		if (stat(file, &st)) {
+			warnx("unable to stat file %s\n", file);
+			return RES_ERROR;
+		}
+		switch(st.st_mode & S_IFMT) {
+		case S_IFREG:
+			res = bsdsum_digest_reg(file, &st, ops, 
+						offset, length, flags);
+			if (res != RES_OK)
+				return res;
+			break;
+		case S_IFDIR:
+			if (flags & FLAG_R) 
+				return bsdsum_digest_dir(ofile, ops, 
+							file, flags);
+			else {
+				warnx("skipping directory %s", file);
+				return RES_SKIPPED;
+			}
+		case S_IFLNK:
+			if (flags & FLAG_K)
+				return RES_OK;
+			else
+				return bsdsum_digest_lnk(ofile, ops, 
+							file, flags);
+		case S_IFBLK:
+			return bsdsum_digest_reg(file, &st, ops, offset,
+						length, flags | FLAG_RAW);
+		case S_IFCHR:
+		case S_IFIFO:
+		case S_IFSOCK:
+			warnx("skipping file %s (unsupported type)",
+				       	file);
+			return RES_SKIPPED;
+		}
 	}
 
+	/* output the results */
 	for (hf = ops; hf; hf = hf->next) {
 		if (std)
 			dprintf(ofile, "%s\n", hf->fdigest);
 		else
 			bsdsum_digest_print(ofile, hf, file);
 	}
-	return(0);
+	return RES_OK;
 }
-
 

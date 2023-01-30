@@ -123,10 +123,12 @@ static void bsdsum_run(bsdsum_t* bs)
 		bs->par->files = bs->argv;
 		bs->par->files_count = bs->argc;
 		bs->par->algs = bs->hl;
+		bs->par->offset = bs->offset;
+		bs->par->length = bs->length;
 	}
 	bs->res = bsdsum_dgl_process(bs->par);
 	bsdsum_dgl_end(&bs->par);
-	if (bs->res & DGL_RES_ERROR)
+	if (bs->res & RES_ERROR)
 		bs->error++;
 }
 
@@ -140,9 +142,15 @@ static void bsdsum_setup(bsdsum_t* bs, int argc, char **argv)
 	bs->argc = argc;
 	bs->argv = argv;
 
-	/* Most arguments are mutually exclusive */
-	if ((bs->argc != 1) && (bs->length >= 0 || bs->offset >= 0))
-		errx(1, "one file (and only one) must be specified with -f/-l");
+	/* check command-line options */
+	if ((bs->length >= 0 || bs->offset >= 0)) {
+		if (bs->argc != 1)
+			errx(1, "one file (and only one) must be "
+					"specified with -f/-l");
+		if (bs->flags & (FLAG_P | FLAG_K | FLAG_C | FLAG_CSEL |
+					FLAG_R))
+			errx(1, "non-compatible options on command-line");
+	}
 	if (bs->selective_checklist != NULL && bs->argc == 0)
 		errx(1, "missing selection of files to check");
 	if ((bs->flags & FLAG_C) && bs->argc == 0)
@@ -158,6 +166,8 @@ static void bsdsum_setup(bsdsum_t* bs, int argc, char **argv)
 		fl++;
 	if (fl > 1) 
 		errx(1, "-p, -C and -c are exclusive");
+	if (fl && (bs->flags & (FLAG_K | FLAG_R)))
+		errx(1, "non-compatible options on command-line");
 	if (bs->selective_checklist || (bs->flags & FLAG_C)) {
 		if (bsdsum_count_op(bs) > 1)
 			errx(1, "only one algorithm may be specified "
@@ -183,7 +193,7 @@ static void bsdsum_parse(bsdsum_t* bs, int argc, char** argv)
 {
 	bsdsum_op_t *hf, *hftmp;
 	char *cp;
-	const char *optstr = "a:C:co:hprts:f:l:";
+	const char *optstr = "a:C:co:hprkts:f:l:";
 	char* endptr;
 	int i, fl;
 	int a_opts = 0;
@@ -261,6 +271,9 @@ static void bsdsum_parse(bsdsum_t* bs, int argc, char** argv)
 			break;
 		case 'c':
 			bs->flags |= FLAG_C;
+			break;
+		case 'k':
+			bs->flags |= FLAG_K;
 			break;
 		case 'p':
 			bs->flags |= FLAG_P;

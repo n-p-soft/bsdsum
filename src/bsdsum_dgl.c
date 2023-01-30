@@ -32,6 +32,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <signal.h>
+#include <dirent.h>
 
 #include "bsdsum.h"
 
@@ -84,6 +85,8 @@ bsdsum_dgl_par_t *bsdsum_dgl_start(bsdsum_dgl_cmd_t cmd,
 
 	par->cmd = cmd;
 	par->flags = flags;
+	par->offset = -1;
+	par->length = -1;
 	if (path) {
 		par->path = path;
 		par->listfd = -1;
@@ -108,7 +111,7 @@ void bsdsum_dgl_end(bsdsum_dgl_par_t** par)
 }
 
 /* check a lit of digests. */
-static bsdsum_dgl_res_t bsdsum_dgl_check_line(bsdsum_dgl_par_t *par, 
+static bsdsum_res_t bsdsum_dgl_check_line(bsdsum_dgl_par_t *par, 
 						char *line)
 {
 	int d_error, cmp, i;
@@ -125,25 +128,25 @@ static bsdsum_dgl_res_t bsdsum_dgl_check_line(bsdsum_dgl_par_t *par,
 		warnx("line %i: unsupported algorithm", 
 			par->lineno);
 		par->l_error++;
-		return DGL_RES_CONTINUE;
+		return RES_CONTINUE;
 	}
 	else if (st == STYLE_ERROR) {
 		warnx("line %i: format not recognized", 
 			par->lineno);
 		par->l_syntax++;
-		return DGL_RES_CONTINUE;
+		return RES_CONTINUE;
 	}
 	else if (st == STYLE_COMMENT) {
 		par->l_comment++;
-		return DGL_RES_CONTINUE;
+		return RES_CONTINUE;
 	}
 	else if (st == STYLE_NONE) {
 		par->l_empty++;
-		return DGL_RES_CONTINUE;
+		return RES_CONTINUE;
 	}
 	else if (par->algs && hf != par->algs) {
 		par->l_skipped++;	
-		return DGL_RES_CONTINUE;
+		return RES_CONTINUE;
 	}
 
 	/* filter-out some files */
@@ -155,7 +158,7 @@ static bsdsum_dgl_res_t bsdsum_dgl_check_line(bsdsum_dgl_par_t *par,
 			}
 		}
 		if (i == par->files_count)
-			return DGL_RES_CONTINUE;
+			return RES_CONTINUE;
 	}
 
 	if (hf->split >= 2)
@@ -164,7 +167,9 @@ static bsdsum_dgl_res_t bsdsum_dgl_check_line(bsdsum_dgl_par_t *par,
 		snprintf(algorithm, 32, "%s", hf->name);
 
 	/* hash the file */
-	d_error = bsdsum_digest_mmap_file(filename,  hf, -1, -1);
+	d_error = bsdsum_digest_one(par->listfd, hf,
+					filename,  par->flags,
+					-1, -1);
 	if (d_error) {
 		printf("(%s) %s: %s\n", algorithm, filename,
 		    (d_error == ENOENT ? "MISSING" : "FAILED"));
@@ -189,24 +194,24 @@ static bsdsum_dgl_res_t bsdsum_dgl_check_line(bsdsum_dgl_par_t *par,
 	}
 }
 
-typedef bsdsum_dgl_res_t (*bsdsum_dgl_cb_t) (bsdsum_dgl_par_t* par,
+typedef bsdsum_res_t (*bsdsum_dgl_cb_t) (bsdsum_dgl_par_t* par,
 						char *line);
 
 /* process each line using callback 'cb'. */
-static bsdsum_dgl_res_t bsdsum_dgl_read(bsdsum_dgl_par_t *par,
+static bsdsum_res_t bsdsum_dgl_read(bsdsum_dgl_par_t *par,
 					bsdsum_dgl_cb_t cb)
 {
 	int eof = 0;
 	char *line;
-	bsdsum_dgl_res_t res = DGL_RES_OK;
-	bsdsum_dgl_res_t lres;
+	bsdsum_res_t res = RES_OK;
+	bsdsum_res_t lres;
 
 	while(eof == 0) {
 		line = bsdsum_dgl_getline(par->listfd, &eof, par->path);
 		if (eof && ( ! line || ! *line))
 			break;
 		if (line == NULL) {
-			res = DGL_RES_ERR_IO;
+			res = RES_ERR_IO;
 			break;
 		}
 		par->lineno++;
@@ -219,73 +224,52 @@ static bsdsum_dgl_res_t bsdsum_dgl_read(bsdsum_dgl_par_t *par,
 			continue;
 		}
 		lres = cb(par, line);
-		if (lres & DGL_RES_ERROR)
-			res |= DGL_RES_ERROR;
-		if (lres & DGL_RES_BREAK)
+		if (lres & RES_ERROR)
+			res |= RES_ERROR;
+		if (lres & RES_BREAK)
 			break;
 	}
 
 	if (par->l_error)
-		res |= DGL_RES_ERROR;
+		res |= RES_ERROR;
 
 	return res;
 }
 
 /* Hash par->files. */
-static bsdsum_dgl_res_t bsdsum_dgl_hash(bsdsum_dgl_par_t *par)
+static bsdsum_res_t bsdsum_dgl_hash(bsdsum_dgl_par_t *par)
 {
-	bsdsum_dgl_res_t res = DGL_RES_OK;
+	bsdsum_res_t res = RES_OK;
+	bsdsum_res_t lres;
 	int i;
-	struct stat st;
 
 	for (i = 0; i < par->files_count; i++) {
-		if (stat(par->files[i], &st)) {
-			res = DGL_RES_ERROR;
-			warnx("unable to stat file %s\n",
-					par->files[i]);
-			continue;
-		}
-		switch(st.st_mode & S_IFMT) {
-		case S_IFREG:
-			if (bsdsum_digest_file(par->listfd,
-					par->algs, par->files[i],
-					(par->flags & FLAG_P) ? 1 : 0,
-					-1, -1))
-				par->l_error++;
-			break;
-		case S_IFDIR:
-			/* TODO: if (par->flags & FLAG_R) {
-			}
-			else */ {
-				warnx("skipping directory %s",
-					par->files[i]);
-				par->l_skipped++;
-			}
-			break;
-		case S_IFBLK:
-		case S_IFCHR:
-		case S_IFIFO:
-		case S_IFLNK:
-		case S_IFSOCK:
-			warnx("unsupported file type %s",
-					par->files[i]);
+		lres = bsdsum_digest_one(par->listfd, par->algs,
+		  			par->files[i], par->flags,
+					par->offset, par->length);
+		if (lres & RES_SKIPPED)
 			par->l_skipped++;
-			break;
+		if (lres & RES_ERROR) {
+			par->l_error++;
+			res = RES_ERROR;
 		}
+		if (lres & RES_BREAK)
+			break;
 	}
+	return res;
 }
 
 /* Process some DGL_CMD. */
-bsdsum_dgl_res_t bsdsum_dgl_process(bsdsum_dgl_par_t *par)
+bsdsum_res_t bsdsum_dgl_process(bsdsum_dgl_par_t *par)
 {
-	bsdsum_dgl_res_t res = DGL_RES_OK;
-	bsdsum_dgl_res_t lres;
+	bsdsum_res_t res = RES_OK;
+	bsdsum_res_t lres;
 	int fd = -1;
 	int fflags;
 
 	if (par == NULL) {
 		warnx("missing parameters");
-		return DGL_RES_ERR_PAR;
+		return RES_ERR_PAR;
 	}	
 
 	/* open the digests list (input) or the output */
@@ -300,12 +284,12 @@ bsdsum_dgl_res_t bsdsum_dgl_process(bsdsum_dgl_par_t *par)
 			par->std = 1;
 		} else if (par->path == NULL) {
 			warnx("missing target path");
-			return DGL_RES_ERR_PAR;
+			return RES_ERR_PAR;
 		} else {
 			par->listfd = open(par->path, fflags);
 			if (par->listfd < 0) {
 				warn("cannot open %s", par->path);
-				return DGL_RES_ERR_IO;
+				return RES_ERR_IO;
 			}
 		}
 	}
@@ -341,14 +325,11 @@ bsdsum_dgl_res_t bsdsum_dgl_process(bsdsum_dgl_par_t *par)
 			res = bsdsum_dgl_hash(par);
 			break;
 		case DGL_CMD_HASH_STDIN:
-			if (bsdsum_digest_file(par->listfd, par->algs,
-					"-",
-					(par->flags & FLAG_P) ? 1 : 0,
-					-1, -1))
-				res = DGL_RES_ERROR;
+			res = bsdsum_digest_one(par->listfd, par->algs,
+						"-", par->flags, -1, -1);
 			break;
 		default:
-			res = DGL_RES_ERR_PAR;
+			res = RES_ERR_PAR;
 			break;
 	}
 
@@ -375,7 +356,7 @@ bsdsum_dgl_res_t bsdsum_dgl_process(bsdsum_dgl_par_t *par)
 			warnx("found %i ill-formatted line(s)", 
 					par->l_syntax);
 		/* force one error for these lines */
-		res |= DGL_RES_ERROR;
+		res |= RES_ERROR;
 	}
 
 	/* raise an error if some selected files were not encountered. */
@@ -386,7 +367,7 @@ bsdsum_dgl_res_t bsdsum_dgl_process(bsdsum_dgl_par_t *par)
 			if (par->files_found[i] == 0) {
 				warnx("%s was not found",
 					par->files[i]);
-				res |= DGL_RES_ERROR;
+				res |= RES_ERROR;
 			}
 		}
 	}

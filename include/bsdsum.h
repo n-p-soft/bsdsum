@@ -117,6 +117,8 @@ typedef enum {
 	FLAG_R = 0x10,		/* -r */
 	FLAG_T = 0x20,		/* -t */
 	FLAG_SPLIT = 0x40,	/* using split */
+	FLAG_RAW = 0x80,	/* buffered read instead of mmap */
+	FLAG_K = 0x100,		/* -k */
 } bsdsum_flag_t;
 
 /* Operation to run on a list of digests */
@@ -129,14 +131,15 @@ typedef enum {
 
 /* Result codes for dgl_process */
 typedef enum {
-	DGL_RES_OK = 0,
-	DGL_RES_ERR_PAR, /* bad input parameters */
-	DGL_RES_ERR_IO, /* IO error while reading the list */
+	RES_OK = 0,
+	RES_ERR_PAR, /* bad input parameters */
+	RES_ERR_IO, /* IO error while reading the list */
 	/* flags */
-	DGL_RES_CONTINUE = 0x1000, /* continue the list processing */
-	DGL_RES_BREAK = 0x2000, /* stop list processing */
-	DGL_RES_ERROR = 0x4000, /* at least one error */
-} bsdsum_dgl_res_t;
+	RES_CONTINUE = 0x1000, /* continue the list processing */
+	RES_BREAK = 0x2000, /* stop list processing */
+	RES_ERROR = 0x4000, /* at least one error */
+	RES_SKIPPED = 0x8000, /* file was skipped */
+} bsdsum_res_t;
 
 /* Parameters for dgl_process function: */
 typedef struct {
@@ -156,6 +159,8 @@ typedef struct {
 	int files_count; /* count of items in 'files' */
 	int *files_found; /* 1 for each item of 'files' found */
 	bsdsum_flag_t flags; /* various flags */
+	long offset; /* offset when hashing */
+	long length; /* length to hash */
 } bsdsum_dgl_par_t;
 
 /* program global data */
@@ -170,12 +175,19 @@ typedef struct {
 	bsdsum_op_t *hl;
 	char *selective_checklist;
 	bsdsum_dgl_par_t *par;
-	bsdsum_dgl_res_t res;
+	bsdsum_res_t res;
 	int error;
 } bsdsum_t;
 
-/* length of 'data' field above */
-#define BUFFER_SZK 32
+/* length in KB of buffer for stdin input */
+#define BUFFER_STDIN_SZK 32
+
+/* length in KB of buffer when reading a file for hashing */
+#define BUFFER_RAW_SZK 1024
+
+#ifndef MAX_PATH
+#define MAX_PATH 1024
+#endif
 
 void explicit_bzero(void* p, size_t sz);
 
@@ -200,20 +212,17 @@ bsdsum_op_t* bsdsum_op_for_length(size_t len);
 
 bool bsdsum_op_case_sensitive(bsdsum_style_t st);
 
-int bsdsum_digest_run (bsdsum_op_t *hf,
-			unsigned char* buf, long length, int split);
-
-int bsdsum_digest_mmap_file (const char *file,
-				bsdsum_op_t *hf,
-				long offset, long length);
+bsdsum_res_t bsdsum_digest_mem (bsdsum_op_t *hf, 
+				unsigned char* buf, 
+				long length, int split);
 
 void bsdsum_digest_init(bsdsum_op_t *hf, int fd);
 
 void bsdsum_digest_end(bsdsum_op_t *);
 
-int  bsdsum_digest_file(int ofile, bsdsum_op_t* ops, 
-			const char *file, int echo,
-			long offset, long length);
+bsdsum_res_t bsdsum_digest_one (int ofile, bsdsum_op_t* ops, 
+				const char *file, bsdsum_flag_t flags,
+				long offset, long length);
 
 void bsdsum_digest_print(int, const bsdsum_op_t *, 
 				const char *);
@@ -224,7 +233,7 @@ bsdsum_dgl_par_t* bsdsum_dgl_start(bsdsum_dgl_cmd_t cmd,
 
 void bsdsum_dgl_end(bsdsum_dgl_par_t**);
 
-bsdsum_dgl_res_t bsdsum_dgl_process(bsdsum_dgl_par_t *par);
+bsdsum_res_t bsdsum_dgl_process(bsdsum_dgl_par_t *par);
 
 bsdsum_style_t bsdsum_dgl_parse_line (char *line, 
 					char **filename, char **dg,

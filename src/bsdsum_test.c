@@ -244,7 +244,7 @@ static int bsdsum_test_md52() {
 	hf = bsdsum_op_get("MD5");
 	bsdsum_digest_init(hf, -1);
 	hf->style = STYLE_TERSE;
-	if (bsdsum_digest_run(hf, &dummy, 0, 2))
+	if (bsdsum_digest_mem(hf, &dummy, 0, 2))
 		return 1;
 	if (strcmp (hf->fdigest, m2))
 		return 1;

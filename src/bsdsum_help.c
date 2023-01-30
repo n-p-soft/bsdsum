@@ -62,6 +62,7 @@ void bsdsum_help (void)
 	"       only one file to digest is specified. Implies\n"
 	"       -s terse.\n"
 	"  [-r] when computing digests, recurse into directories.\n"
+	"  [-k] when computing digests, ignore links.\n"
 	"  [-c] 'file' argument(s) is a checklist.\n"
 	"  [-C checklist] bsdsum_compare the checksum of 'file' against\n"
 	"                 checksums in 'checklist'.\n"
