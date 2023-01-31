@@ -98,5 +98,14 @@ clean:
 check: out/bsdsum
 	@$(MAKE) -C tests || exit 1
 
+.PHONY:snap
+snap:
+	@cd ..; tar cfz /tmp/bsdsum.tar.gz bsdsum && \
+		sha1sum /tmp/bsdsum.tar.gz > /tmp/bsdsum.tar.gz.sha1 && \
+		cat /tmp/bsdsum.tar.gz.sha1
 
+.PHONY: swapcheck
+snapcheck:
+	@sha1sum -c /tmp/bsdsum.tar.gz.sha1 && \
+		tar -C .. -d -z -f /tmp/bsdsum.tar.gz || exit 1
 

@@ -76,6 +76,8 @@ void bsdsum_help (void)
 	"             debug: default + debug messages (if enabled)\n"
 	"             file=PATH: output any message to PATH (in addtion\n"
 	"                        to standard error if not disabled)\n"
+	"  [-d path] prepend this path to any file being hashed or\n"
+	"            checked.\n"
 	"  [file ...]\n");
 }
 

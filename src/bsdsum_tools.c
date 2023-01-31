@@ -103,8 +103,9 @@ void bsdsum_log(bsdsum_ll_t lvl, const char *fmt, ...)
 	}
 	va_end(va);
 	if (bsdsum_log_fd > 0)
-		dprintf(bsdsum_log_fd, "%s",
-				buf, strlen(buf));
+		dprintf(bsdsum_log_fd, "%s", buf, strlen(buf));
+	if (lvl & LL_STDOUT)
+		fprintf(stdout, "%s", buf, strlen(buf));
 	fprintf(stderr, "bsdsum: %s", buf);
 	if (lvl & LL_FATAL)
 		exit(1);

@@ -89,26 +89,23 @@ static int bsdsum_count_op (bsdsum_t *bs)
 static void bsdsum_run(bsdsum_t* bs)
 {
 	if (bs->selective_checklist) { /* -C */
-		bs->par = bsdsum_dgl_start(DGL_CMD_CHECK, bs->flags, -1,
+		bs->par = bsdsum_dgl_start(DGL_CMD_CHECK_SEL, 
+						bs->flags, -1,
 						bs->selective_checklist);
+		bs->par->prepend = bs->prepend;
 		bs->par->files = bs->argv;
 		bs->par->files_count = bs->argc;
 		bs->par->algs = bs->hl;
 	} 
 	else if (bs->flags & FLAG_C) { /* -c */
-		if (bs->argc == 0) {
-			bs->par = bsdsum_dgl_start(DGL_CMD_CHECK, bs->flags,
-							0, NULL);
-			bs->par->algs = bs->hl;
-		}
-		else {
-			while (bs->argc--) {
-				bs->par = bsdsum_dgl_start(DGL_CMD_CHECK, 
-								bs->flags, -1,
-								*bs->argv++);
-				bs->par->algs = bs->hl;
-			}
-		}
+		bs->par = bsdsum_dgl_start(DGL_CMD_CHECK_LISTS, 
+					bs->flags,
+					(bs->argc == 0) ? 0 : -1, 
+					NULL);
+		bs->par->algs = bs->hl;
+		bs->par->prepend = bs->prepend;
+		bs->par->files = (bs->argc == 0) ?  NULL : bs->argv;
+		bs->par->files_count = bs->argc;
 	} 
 	else  if ((bs->flags & FLAG_P) || bs->argc == 0) { 
 		/* -p or digest stdin */
@@ -116,6 +113,7 @@ static void bsdsum_run(bsdsum_t* bs)
 					bs->flags,
 					bs->opath ? -1 : 1, bs->opath);
 		bs->par->algs = bs->hl;
+		bs->par->prepend = bs->prepend;
 	}
 	else { 
 		/* digest files */
@@ -126,6 +124,7 @@ static void bsdsum_run(bsdsum_t* bs)
 		bs->par->algs = bs->hl;
 		bs->par->offset = bs->offset;
 		bs->par->length = bs->length;
+		bs->par->prepend = bs->prepend;
 	}
 	bs->res = bsdsum_dgl_process(bs->par);
 	bsdsum_dgl_end(&bs->par);
@@ -137,6 +136,7 @@ static void bsdsum_run(bsdsum_t* bs)
 static void bsdsum_setup(bsdsum_t* bs, int argc, char **argv)
 {
 	int fl = 0;
+	struct stat st;
 
 	/* remaining arguments are files to digest or list of digests 
 	 * to check. */
@@ -195,6 +195,31 @@ static void bsdsum_setup(bsdsum_t* bs, int argc, char **argv)
 			bsdsum_log(LL_ERR|LL_FATAL, 
 				"split digest not usable on stdin");
 	}
+
+	/* prepend path checking */
+	if (bs->prepend) {
+		char *s;
+		size_t len = strlen(bs->prepend);
+
+		if ((len == 0) || stat(bs->prepend, &st)) {
+			bsdsum_log(LL_ERR|LL_FATAL,
+				"path to prepend (%s) is not valid");
+		}
+		if ((st.st_mode & S_IFMT) != S_IFDIR) {
+			bsdsum_log(LL_ERR|LL_FATAL,
+			"path to prepend (%s) is not a directory");
+		}
+		if (bs->prepend[len-1] != '/') {
+			s = calloc(len+2, 1);
+			if (s)
+				snprintf(s, len+2, "%s/", bs->prepend);
+		}
+		else
+			s = strdup(bs->prepend);
+		if (s == NULL)
+			bsdsum_log(LL_ERR|LL_FATAL, "out of memory");
+		bs->prepend = s;
+	}
 }
 
 
@@ -203,7 +228,7 @@ static void bsdsum_parse(bsdsum_t* bs, int argc, char** argv)
 {
 	bsdsum_op_t *hf, *hftmp;
 	char *cp;
-	const char *optstr = "a:C:co:v:hprkts:f:l:";
+	const char *optstr = "a:C:co:d:v:hprkts:f:l:";
 	char* endptr;
 	int i, fl;
 	int a_opts = 0;
@@ -308,6 +333,8 @@ static void bsdsum_parse(bsdsum_t* bs, int argc, char** argv)
 					bs->flags |= FLAG_SPLIT;
 			}
 			break;
+		case 'd':
+			bs->prepend = optarg;
 		case 'o':
 			bs->opath = optarg;
 			break;

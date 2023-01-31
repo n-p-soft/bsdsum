@@ -131,12 +131,14 @@ typedef enum {
 	LL_DEBUG = 0x10, /* debug messages */
 	LL_DEF = LL_ERR | LL_WARN, /* default behaviour (warnings+error) */
 	LL_FATAL = 0x20, /* end program */
+	LL_STDOUT = 0x40, /* also output to stdout (unless LL_NONE) */
 } bsdsum_ll_t;
 
 /* Operation to run on a list of digests */
 typedef enum {
 	DGL_CMD_NONE = 0,
-	DGL_CMD_CHECK, /* verify the digests */
+	DGL_CMD_CHECK_LISTS, /* verify the digests (-c) */
+	DGL_CMD_CHECK_SEL, /* selective checking (-C) */
 	DGL_CMD_HASH, /* digest files */
 	DGL_CMD_HASH_STDIN, /* digest stdin */
 } bsdsum_dgl_cmd_t;
@@ -173,6 +175,7 @@ typedef struct {
 	bsdsum_flag_t flags; /* various flags */
 	off_t offset; /* offset when hashing */
 	off_t length; /* length to hash */
+	const char *prepend; /* path to prepend */
 } bsdsum_dgl_par_t;
 
 /* program global data */
@@ -192,6 +195,7 @@ typedef struct {
 	bsdsum_ll_t log_lvl;
 	const char* log;
 	int log_fd;
+	const char *prepend;
 } bsdsum_t;
 
 /* length in KB of buffer for stdin input */

@@ -95,10 +95,17 @@ Usage
 
         bsdsum -c data.dg
 
+  - fully check the list of digests read from standard input:
+
+        bsdsum -c
+
   - check the digest for file 'my_file' from the list of digests 'data.dg'
     (only one list of files to check can be specified when using -C):
 
         bsdsum -C data.dg my_file
+
+    Note: for such a query, an error is reported if 'my_file' is not found in
+          the list 'data.dg'.
 
   - check the MD5 digest (only) for file 'my_file' from the list of digests
     'data.dg':

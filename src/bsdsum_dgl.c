@@ -124,13 +124,13 @@ static bsdsum_res_t bsdsum_dgl_check_line(bsdsum_dgl_par_t *par,
 
 	st = bsdsum_dgl_parse_line(line, &filename, &checksum, &hf);
 	if (st == STYLE_UNSUPPORTED) {
-		bsdsum_log(LL_WARN, "line %i: unsupported algorithm", 
+		bsdsum_log(LL_ERR, "line %i: unsupported algorithm", 
 			par->lineno);
 		par->l_error++;
 		return RES_CONTINUE;
 	}
 	else if (st == STYLE_ERROR) {
-		bsdsum_log(LL_WARN, "line %i: format not recognized", 
+		bsdsum_log(LL_ERR, "line %i: format not recognized", 
 			par->lineno);
 		par->l_syntax++;
 		return RES_CONTINUE;
@@ -173,7 +173,7 @@ static bsdsum_res_t bsdsum_dgl_check_line(bsdsum_dgl_par_t *par,
 		printf("(%s) %s: %s\n", algorithm, filename,
 		    (d_error == ENOENT ? "MISSING" : "FAILED"));
 		if (d_error != ENOENT)
-			bsdsum_log(LL_WARN, "cannot digest %s", filename);
+			bsdsum_log(LL_ERR, "cannot digest %s", filename);
 		par->l_error++;
 	}
 	else {
@@ -182,11 +182,13 @@ static bsdsum_res_t bsdsum_dgl_check_line(bsdsum_dgl_par_t *par,
 		else
 			cmp = strcasecmp(checksum, hf->fdigest);
 		if (cmp == 0) {
-			(void)printf("(%s) %s: OK\n", algorithm,
+			bsdsum_log(LL_STDOUT,
+				"(%s) %s: OK\n", algorithm,
 				    filename);
 			par->l_ok++;
 		} else {
-			(void)printf("(%s) %s: FAILED\n", 
+			bsdsum_log(LL_STDOUT|LL_ERR,
+					"(%s) %s: FAILED\n", 
 					algorithm, filename);
 			par->l_error++;
 		}
@@ -243,6 +245,7 @@ static bsdsum_res_t bsdsum_dgl_hash(bsdsum_dgl_par_t *par)
 	int i;
 
 	for (i = 0; i < par->files_count; i++) {
+		bsdsum_log(LL_VERBOSE, "hashing %s", par->files[i]);
 		lres = bsdsum_digest_one(par->listfd, par->algs,
 		  			par->files[i], par->flags,
 					par->offset, par->length);
@@ -252,9 +255,139 @@ static bsdsum_res_t bsdsum_dgl_hash(bsdsum_dgl_par_t *par)
 			par->l_error++;
 			res = RES_ERROR;
 		}
+		if (lres == RES_OK)
+			par->l_ok++;
 		if (lres & RES_BREAK)
 			break;
 	}
+	return res;
+}
+
+/* Check the list of digests associated to 'path' OR 'fd'. */
+static bsdsum_res_t bsdsum_dgl_check_one(bsdsum_dgl_par_t *par,
+					const char *path, int listfd)
+{
+	bsdsum_res_t res;
+
+	if (listfd < 0) {
+		par->listfd = open(path, O_RDONLY);
+		if (par->listfd < 0) {
+			bsdsum_log(LL_ERR, "cannot open list %s", path);
+			return RES_ERR_IO|RES_ERROR;
+		}
+		bsdsum_log(LL_VERBOSE, "checking list at %s", path);
+	}
+	else {
+		par->listfd = listfd;
+		bsdsum_log(LL_VERBOSE, "checking list on %i", par->listfd);
+	}
+
+	res = bsdsum_dgl_read(par, bsdsum_dgl_check_line);
+
+	if (path) {
+		close(par->listfd);
+		par->listfd = -1;
+	}
+
+	return res;
+}
+
+/* Checking command entry point.
+ * For DGL_CMD_CHECK, par->files is NULL for a "-c" command (in this
+ * case par->path is the list of digests to check) but for a "-C"
+ * command, par->files is the head of the listS of digests.
+ */
+static bsdsum_res_t bsdsum_dgl_check(bsdsum_dgl_par_t *par)
+{
+	int i;
+	bsdsum_res_t res = RES_OK;
+	char **files;
+	int files_count;
+
+	if (par->files_count == 0) {
+		/* list of digests from stdin */
+		if (bsdsum_dgl_check_one(par, NULL, 0) & RES_ERROR)
+			res = RES_ERROR;
+	}
+	else {
+		/* set par->files to NULL because it is the
+		 * selection of files to check when running
+		 * bsdsum_dgl_check_one. */
+		files = par->files;
+		par->files = NULL;
+		files_count = par->files_count;
+		par->files_count = 0;
+		for (i = 0; i < files_count; i++) {
+			if (bsdsum_dgl_check_one(par,
+					files[i], -1) & RES_ERROR)
+				res = RES_ERROR;
+		}
+	}
+	return res;
+}
+
+/* open the output when hashing, if par->listfd is not set (in
+ * this last case, save it to 'fd' to remember not clsing it). */
+static bsdsum_res_t bsdsum_dgl_open_out(bsdsum_dgl_par_t *par, int *fd)
+{
+	const int fflags = O_CREAT|O_TRUNC|O_WRONLY;
+
+	if (par->listfd < 0) {
+		*fd = -1;
+		if (par->path == NULL) {
+			bsdsum_log(LL_ERR, "missing target path");
+			return RES_ERR_PAR|RES_ERROR;
+		} 
+		else {
+			par->listfd = open(par->path, fflags, 0600);
+			if (par->listfd < 0) {
+				bsdsum_log(LL_ERR, 
+					"cannot open %s", par->path);
+				return RES_ERR_IO|RES_ERROR;
+			}
+		}
+	}
+	else 
+		*fd = par->listfd;
+	return RES_OK;
+}
+
+/* the -C command. List path is par->path and the files to check
+ * are into par->files.
+ */
+static bsdsum_res_t bsdsum_dgl_check_sel(bsdsum_dgl_par_t *par)
+{
+	bsdsum_res_t res = RES_OK;
+
+	/* no selection ? check the whole list. */
+	if (par->files == NULL)
+		return bsdsum_dgl_check_one(par, par->path, -1);
+
+	/* initialize the found flag list */
+	par->files_found = calloc((size_t)par->files_count, 
+						sizeof(int));
+	if (par->files_found == NULL)
+		bsdsum_log(LL_ERR|LL_FATAL, "out of memory");
+
+	/* check the list against selection */
+	res = bsdsum_dgl_check_one(par, par->path, -1);
+
+	/* raise an error if some selected files were not encountered. */
+	if (par->files_found) {
+		int i;
+
+		for (i = 0; i < par->files_count; i++) {
+			if (par->files_found[i] == 0) {
+				bsdsum_log(LL_WARN, 
+					"%s was not found nor checked",
+					par->files[i]);
+				par->l_skipped++;
+				res |= RES_ERROR;
+			}
+		}
+	}
+	free(par->files_found);
+	par->files_found = NULL;
 	return res;
 }
 
@@ -262,42 +395,12 @@ static bsdsum_res_t bsdsum_dgl_hash(bsdsum_dgl_par_t *par)
 bsdsum_res_t bsdsum_dgl_process(bsdsum_dgl_par_t *par)
 {
 	bsdsum_res_t res = RES_OK;
-	bsdsum_res_t lres;
 	int fd = -1;
-	int fflags;
 
 	if (par == NULL) {
-		bsdsum_log(LL_WARN, "missing parameters");
+		bsdsum_log(LL_ERR, "missing parameters");
 		return RES_ERR_PAR;
 	}	
-
-	/* open the digests list (input) or the output */
-	if (par->cmd == DGL_CMD_HASH)
-		fflags = O_CREAT|O_APPEND|O_WRONLY;
-	else
-		fflags = O_RDONLY;
-
-	if (par->listfd < 0) {
-		if (strcmp(par->path, "-") == 0) {
-			par->listfd = 0;
-			par->std = 1;
-		} else if (par->path == NULL) {
-			bsdsum_log(LL_WARN, "missing target path");
-			return RES_ERR_PAR;
-		} else {
-			if (fflags & O_CREAT)
-				par->listfd = open(par->path, 
-						fflags, 0600);
-			else
-				par->listfd = open(par->path, fflags);
-			if (par->listfd < 0) {
-				bsdsum_log(LL_WARN, "cannot open %s", par->path);
-				return RES_ERR_IO;
-			}
-		}
-	}
-	else
-		fd = par->listfd;
 
 	par->l_error = 0;
 	par->l_syntax = 0;
@@ -306,36 +409,39 @@ bsdsum_res_t bsdsum_dgl_process(bsdsum_dgl_par_t *par)
 	par->l_ok = 0;
 	par->lineno = 0;
 
-	/* initialize the found flag list */
-	if ((par->cmd == DGL_CMD_CHECK) && (par->files != NULL)) {
-		par->files_found = calloc((size_t)par->files_count, 
-						sizeof(int));
-		if (par->files_found == NULL)
-			bsdsum_log(LL_ERR|LL_FATAL,
-					"out of memory");
-	}
-
 	/* run the command */
 	switch(par->cmd) {
-		case DGL_CMD_CHECK:
-			/* check the digests in the list, possibly using
-			 * the selector par->files. */
-			res = bsdsum_dgl_read(par,
-						bsdsum_dgl_check_line);
+		case DGL_CMD_CHECK_LISTS:
+			/* list checking command (-c). par->files is the head
+			 * of the listS to check. */
+			res = bsdsum_dgl_check(par);
+			break;
+		case DGL_CMD_CHECK_SEL:
+			/* selective checking for one list par->path. Files
+			 * to check are stored in par->files. */
+			res = bsdsum_dgl_check_sel(par);
 			break;
 		case DGL_CMD_HASH:
-			/* compute the digests of par->files and output
-			 * to par->listfd. */
-			res = bsdsum_dgl_hash(par);
+			/* compute the digests for par->files and output
+			 * to par->listfd. par->listfd OR par->path is
+			 * used as output. */
+			res = bsdsum_dgl_open_out(par, &fd);
+			if (res == RES_OK)
+				res = bsdsum_dgl_hash(par);
 			break;
 		case DGL_CMD_HASH_STDIN:
-			res = bsdsum_digest_one(par->listfd, par->algs,
+			/* hash stdin. par->listfd OR par->path as output. */
+			res = bsdsum_dgl_open_out(par, &fd);
+			if (res == RES_OK)
+				res = bsdsum_digest_one(par->listfd, 
+							par->algs,
 						"-", par->flags, -1, -1);
 			break;
 		default:
 			res = RES_ERR_PAR;
 			break;
 	}
+
 
 	/* close the list */
 	if (fd < 0) {
@@ -344,37 +450,46 @@ bsdsum_res_t bsdsum_dgl_process(bsdsum_dgl_par_t *par)
 		par->listfd = -1;
 	}
 
+	/* summary */
 	if (par->l_skipped) {
 		if (par->path)
-			bsdsum_log(LL_WARN, "%s: %i item(s) skipped", 
-					par->path, par->l_skipped);
+			bsdsum_log(LL_WARN, 
+				"%s: %i item(s) skipped", 
+				par->path, par->l_skipped);
 		else
-			bsdsum_log(LL_WARN, "%i item(s) skipped", 
+			bsdsum_log(LL_WARN, 
+				"%i item(s) skipped", 
 				par->l_skipped);
 	}
 	if (par->l_syntax) {
 		if (par->path)
-			bsdsum_log(LL_WARN, "%s: found %i ill-formatted line(s)", 
-					par->path, par->l_syntax);
+			bsdsum_log(LL_WARN, 
+				"%s: found %i ill-formatted line(s)", 
+				par->path, par->l_syntax);
 		else
-			bsdsum_log(LL_WARN, "found %i ill-formatted line(s)", 
-					par->l_syntax);
+			bsdsum_log(LL_WARN, 
+				"found %i ill-formatted line(s)", 
+				par->l_syntax);
 		/* force one error for these lines */
 		res |= RES_ERROR;
 	}
 
-	/* raise an error if some selected files were not encountered. */
-	if (par->files_found) {
-		int i;
-
-		for (i = 0; i < par->files_count; i++) {
-			if (par->files_found[i] == 0) {
-				bsdsum_log(LL_WARN, "%s was not found",
-					par->files[i]);
-				res |= RES_ERROR;
-			}
-		}
-	}
+	bsdsum_log(LL_VERBOSE, 
+			"count of ill-formatted lines: %i", par->l_syntax);
+	bsdsum_log(LL_VERBOSE, 
+			"count of commented-out lines: %i", par->l_comment);
+	bsdsum_log(LL_VERBOSE, 
+			"count of empty lines: %i", par->l_empty);
+	bsdsum_log(LL_VERBOSE, 
+			"count of items: %i", par->lineno);
+	bsdsum_log(LL_VERBOSE, 
+			"count of items processed OK: %i", par->l_ok);
+	bsdsum_log(LL_VERBOSE, 
+			"count of skipped items: %i", par->l_skipped);
+	bsdsum_log(LL_VERBOSE, 
+			"count of erroneous items: %i", par->l_error);
+	bsdsum_log(LL_VERBOSE, 
+			"final result: %x", res);
 
 	return res;
 }
