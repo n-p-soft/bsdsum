@@ -46,6 +46,7 @@ static void bsdsum_init (bsdsum_t *bs)
 	memset(bs, 0, sizeof(bsdsum_t));
 	bs->length = -1;
 	bs->offset = -1;
+	bs->out_lvl = LL_DEF;
 }
 
 

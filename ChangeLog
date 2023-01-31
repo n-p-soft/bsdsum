@@ -4,8 +4,16 @@ bsdsum
 see git log for more details.
 
 2023/01 - v1.5
-* add BLAKExxx, WHIRLPOOL algorithms
-* add "mix32" encoding
+* add BLAKE, BLAKE2B, BLAKE2S, BLAKE3, WHIRLPOOL algorithms
+* add "mix32" (5-bit) encoding 
+* add "-r" option for recursive directory access
+* add "-k" option for skipping links
+* fix "-l" (length) and "-f" (offset) options
+* add large files support on Linux (32-bit or 64-bit)
+* add block devices support (only available if large files
+  support is enabled)
+* code reorganization
+* many fixes
 
 2022/12, 2023/01 - v1.4
 * add split digest

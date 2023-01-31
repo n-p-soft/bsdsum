@@ -1,5 +1,7 @@
-bsdsum v1.5 (01/2023)
-=====================
+bsdsum
+======
+
+Last modified: 2023/01/31.
 
   bsdsum is a tool for computing and checking digests of data. It runs under
 GNU/Linux and BSD systems. Its name comes from the fact it is BSD-licensed and
@@ -16,7 +18,7 @@ formats:
 
   The style of output is specified with the "-s" option:
 
-    -s default: for BSD format
+    -s default: for BSD format (default style if unspecified)
     -s base64: for BSD base64-encoded format
     -s mix32: BSD format using a custom character set including 32 punctuation
               signs, letters, digits
@@ -27,8 +29,8 @@ formats:
 
   Supported algorithms are:
 
-   MD5, SHA1, SHA256, SHA384, SHA512,
-   Keccak-1600 SHA3-256 and SHA3-512.
+   MD5, SHA1, SHA256 (default choice if not specified), SHA384, SHA512,
+   Keccak-1600 SHA3-256 and SHA3-512,
    WHIRLPOOL (512 bits),
    BLAKE224, BLAKE256, BLAKE384, BLAKE512,
    BLAKE2B (512 bits, unkeyed), BLAKE2S (256 bits, unkeyed),
@@ -37,6 +39,10 @@ formats:
 
   Multiple algorithms may be specified for each source of data, using the -a 
 option (i.e. -a md5,sha1,size).
+
+  On Linux (both 32-bit and 64-bit) and 64-bit BSDs, large files support is
+available, else the maximum length of the files is 2 or 4 GB and block devices
+are not supported.
 
 
 Split digests
@@ -75,7 +81,7 @@ Usage
         cat data | bsdsum -a sha256
 
   - store the SHA256:2 split digest of file 'data' into 'data.dg'
-    (the 'cat' method as above will not work for split digests, as
+    (the 'cat' method above will not work for split digests, as
     the length of the input data must be known):
 
         bsdsum -a sha256:2 -o data.dg data
@@ -84,11 +90,13 @@ Usage
 
         bsdsum -a sha256:2 data > data.dg
 
-  - check the digests stored in the file 'data.dg':
+  - fully check the digests stored in the file 'data.dg' (multiple lists to
+    check can be specified on the command-line):
 
         bsdsum -c data.dg
 
-  - check the digest for file 'my_file' from the list of digests 'data.dg':
+  - check the digest for file 'my_file' from the list of digests 'data.dg'
+    (only one list of files to check can be specified when using -C):
 
         bsdsum -C data.dg my_file
 
@@ -101,6 +109,16 @@ Usage
     into 'data.dg':
 
         bsdsum -s base64 -a sha3-256,size data > data.dg
+
+  - compute the SHA-256 digest of the data in file './data' from offset 100
+    to 149 (only one file to digest must be specified here, and the output
+    is always done in "terse" style):
+
+        bsdsum -f 100 -l 50 ./data
+
+  - hash any file under directory ./src/ (recursively), but skipping links:
+
+        bsdsum -r -k ./src
 
   - run the tiny auto-test:
 
@@ -152,6 +170,10 @@ hashes for many other files. Such a file may be specified when using the
   - "DIGEST  FILE" (two spaces)
 
   - "DIGEST FILE" (one space)
+
+  - "# $BSDSUM: date,digest $" as last line of the file, stores the "supersum"
+    of the list, that is, the digest of all valid lines (except ignored ones)
+    above itself.
 
   Any other line will be rejected and an error reported.
 

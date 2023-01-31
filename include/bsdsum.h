@@ -20,6 +20,7 @@
 
 #include <sys/types.h>
 #include <stdio.h>
+#include <stdarg.h>
 #include "sha/sha.h"
 #include "md5/md5.h"
 #include "bsdsum_sha3.h"
@@ -121,6 +122,16 @@ typedef enum {
 	FLAG_K = 0x100,		/* -k */
 } bsdsum_flag_t;
 
+/* log level */
+typedef enum {
+	LL_NONE = 0, /* output nothing */
+	LL_ERR = 2, /* output errors */
+	LL_WARN = 4, /* output warnings */
+	LL_VERBOSE = 8, /* some additional messages */
+	LL_DEBUG = 0x10, /* debug messages */
+	LL_DEF = LL_ERR | LL_WARN, /* default behaviour (warnings+error) */
+} bsdsum_ll_t;
+
 /* Operation to run on a list of digests */
 typedef enum {
 	DGL_CMD_NONE = 0,
@@ -159,8 +170,8 @@ typedef struct {
 	int files_count; /* count of items in 'files' */
 	int *files_found; /* 1 for each item of 'files' found */
 	bsdsum_flag_t flags; /* various flags */
-	long offset; /* offset when hashing */
-	long length; /* length to hash */
+	off_t offset; /* offset when hashing */
+	off_t length; /* length to hash */
 } bsdsum_dgl_par_t;
 
 /* program global data */
@@ -169,14 +180,15 @@ typedef struct {
 	char **argv;
 	bsdsum_flag_t flags;
 	bsdsum_style_t style;
-	long length;
-	long offset;
+	off_t length;
+	off_t offset;
 	const char *opath; /* -o path */
 	bsdsum_op_t *hl;
 	char *selective_checklist;
 	bsdsum_dgl_par_t *par;
 	bsdsum_res_t res;
 	int error;
+	bsdsum_ll_t out_lvl;
 } bsdsum_t;
 
 /* length in KB of buffer for stdin input */
@@ -189,65 +201,66 @@ typedef struct {
 #define MAX_PATH 1024
 #endif
 
-void explicit_bzero(void* p, size_t sz);
-
+/* operator "size" */
 void bsdsum_size_init (bsdsum_ctx_t *ctx);
-
 void bsdsum_size_update (bsdsum_ctx_t * ctx,
      		             const unsigned char *data, size_t len);
-
 void bsdsum_size_final (unsigned char *dg, bsdsum_ctx_t *ctx);
 
+/* base64 encoding */
 int bsdsum_b64_ntop(const unsigned char *src, size_t srclength, 
 			char *target, size_t targsize);
-
 bool bsdsum_b64_test (const char *s, size_t dlen);
 
+/* operators */
 bsdsum_op_t* bsdsum_op_get(const char* name);
-
 bsdsum_op_t* bsdsum_op_find_alg(const char *cp, 
 				bsdsum_style_t style, int quiet);
-
 bsdsum_op_t* bsdsum_op_for_length(size_t len);
-
 bool bsdsum_op_case_sensitive(bsdsum_style_t st);
 
+/* single digest computation */
 bsdsum_res_t bsdsum_digest_mem (bsdsum_op_t *hf, 
 				unsigned char* buf, 
-				long length, int split);
-
+				off_t length, int split);
 void bsdsum_digest_init(bsdsum_op_t *hf, int fd);
-
 void bsdsum_digest_end(bsdsum_op_t *);
-
 bsdsum_res_t bsdsum_digest_one (int ofile, bsdsum_op_t* ops, 
 				const char *file, bsdsum_flag_t flags,
-				long offset, long length);
-
+				off_t offset, off_t length);
 void bsdsum_digest_print(int, const bsdsum_op_t *, 
 				const char *);
 
+/* digests lists & batch */
 bsdsum_dgl_par_t* bsdsum_dgl_start(bsdsum_dgl_cmd_t cmd,
 					bsdsum_flag_t flags,
 					int listfd, const char *path);
-
 void bsdsum_dgl_end(bsdsum_dgl_par_t**);
-
 bsdsum_res_t bsdsum_dgl_process(bsdsum_dgl_par_t *par);
-
 bsdsum_style_t bsdsum_dgl_parse_line (char *line, 
 					char **filename, char **dg,
 					bsdsum_op_t **hf);
 
+/* various */
 void bsdsum_help(void);
-
 void bsdsum_autotest(void);
 
+/* tools */
 char* bsdsum_getline(int fd, int* eof, const char *filename);
+off_t bsdsum_device_size(const char* dev);
+void explicit_bzero(void* p, size_t sz);
+void bsdsum_log(bsdsum_ll_t lvl, const char *fmt, ...);
+extern bsdsum_ll_t bsdsum_log_level;
 
+#ifdef BSDSUM_DEBUG
+#define DBG(FMT,...) bsdsum_log(LL_DEBUG, FMT, __VA_ARGS__)
+#else
+#define DBG(FMT,...)
+#endif
+
+/* 5-bit encoding */
 char* bsdsum_enc_32 (const unsigned char *data, size_t len,
 			bsdsum_set32_t set, size_t *olen);
-
 bsdsum_style_t bsdsum_enc_test(const char *s, size_t alg_len);
 
 #endif

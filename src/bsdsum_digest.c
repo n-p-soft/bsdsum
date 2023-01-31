@@ -131,10 +131,10 @@ void bsdsum_digest_print (int ofile, const bsdsum_op_t *hf,
 static bsdsum_res_t bsdsum_digest_read(int fd, bsdsum_op_t *hf,
 					bool first_only,
 					bool nosplit_only,
-					long offset, long length)
+					off_t offset, off_t length)
 {
 	ssize_t rd;
-	long len;
+	off_t len;
 	bsdsum_op_t* o;
 	static unsigned char *readbuf = NULL;
 
@@ -167,6 +167,13 @@ static bsdsum_res_t bsdsum_digest_read(int fd, bsdsum_op_t *hf,
 		}
 		length -= len;
 	}
+	for (o = hf; o; o = o->next) {
+		if (nosplit_only && (o->split > 1))
+			continue;	
+		bsdsum_digest_end(o);
+		if (first_only)
+		       break;
+	}
 	return RES_OK;
 }
 
@@ -177,11 +184,11 @@ static bsdsum_res_t bsdsum_digest_read(int fd, bsdsum_op_t *hf,
 static bsdsum_res_t bsdsum_digest_split(bsdsum_op_t *hf,
 					const char* file,
 					unsigned char *buf,
-					long offset, long length)
+					off_t offset, off_t length)
 {
 	int fd, i, status, nchilds, allok;
 	size_t slen;
-	long off = offset;
+	off_t off = offset;
 	int fds[MAX_SPLIT];
 	pid_t pids[MAX_SPLIT];
 	unsigned char *cdg;
@@ -288,12 +295,11 @@ static bsdsum_res_t bsdsum_digest_split(bsdsum_op_t *hf,
  */
 static bsdsum_res_t bsdsum_digest_file(const char* file, 
 					bsdsum_op_t* hf,
-					long offset, long length)
+					off_t offset, off_t length)
 {
 	int fd;
 	bsdsum_op_t *o;
-	ssize_t rd;
-	long len, savlen;
+	off_t len, savlen;
        
 	fd = open(file, O_RDONLY);
 	if (fd < 0) {
@@ -323,9 +329,6 @@ static bsdsum_res_t bsdsum_digest_file(const char* file,
 			return RES_ERROR;
 	}
 
-	for (o = hf; o; o = o->next)
-		bsdsum_digest_end(o);
-
 	return RES_OK;
 }
 
@@ -334,7 +337,7 @@ static bsdsum_res_t bsdsum_digest_file(const char* file,
  * override hf->split.
  * If RES_OK is returned then hf->digest and hf->fdigest are set. */
 bsdsum_res_t bsdsum_digest_mem (bsdsum_op_t *hf, 
-				unsigned char* buf, long length,
+				unsigned char* buf, off_t length,
 				int split)
 {
 	bsdsum_res_t res = RES_OK;
@@ -358,16 +361,17 @@ bsdsum_res_t bsdsum_digest_mem (bsdsum_op_t *hf,
 static bsdsum_res_t bsdsum_digest_reg (const char *file,
 					struct stat *stsrc,
 					bsdsum_op_t *hf,
-					long offset, long length,
+					off_t offset, off_t length,
 					bsdsum_flag_t flags)
 {
 	struct stat st;
 	struct stat *pst = &st;
 	void *base;
-	size_t len;
+	off_t len;
 	int f;
 	int r = 0;
 	bsdsum_op_t *o;
+	off_t total;
 
 	//printf("%s %i %i\n", file, offset, length);
 	if (stsrc)
@@ -377,19 +381,29 @@ static bsdsum_res_t bsdsum_digest_reg (const char *file,
 		return RES_ERROR;
 	}
 
+	if ((pst->st_mode & S_IFMT) == S_IFBLK) {
+		total = bsdsum_device_size(file); 
+		if (total == (off_t)(-1)) {
+			warn("block device not supported (%s)", file);
+			return RES_ERROR;
+		}
+	}
+	else
+		total = pst->st_size;
+
 	if (offset < 0) 
 		offset = 0;
-	else if (offset >= pst->st_size) {
+	else if (offset >= total) {
 		warnx("bad offset specified");
 		return RES_ERROR;
 	}
 	if (length < 0) 
-		length = pst->st_size - offset;
-	else if (length > pst->st_size) {
+		length = total - offset;
+	else if (length > total) {
 		warnx("bad length specified");
 		return RES_ERROR;
 	}
-	if (offset + length > pst->st_size) {
+	if (offset + length > total) {
 		warnx("bad offset/length specified");
 		return RES_ERROR;
 	}
@@ -412,7 +426,7 @@ static bsdsum_res_t bsdsum_digest_reg (const char *file,
 	}
 
 	if ( ! (flags & FLAG_RAW))
-	       	base = mmap(NULL, pst->st_size, PROT_READ,
+	       	base = mmap(NULL, total, PROT_READ,
 				MAP_PRIVATE, f, 0); 
 	else
 		base = (void*)(-1);
@@ -430,7 +444,7 @@ static bsdsum_res_t bsdsum_digest_reg (const char *file,
 	}
 
 	if (base)
-		munmap(base, pst->st_size);
+		munmap(base, total);
 	close(f);
 	if (r) {
 		warnx("could not digest file %s", file);
@@ -512,7 +526,7 @@ static bsdsum_res_t bsdsum_digest_dir(int ofile,
  */
 bsdsum_res_t bsdsum_digest_one (int ofile, bsdsum_op_t* ops, 
 				const char *file, bsdsum_flag_t flags,
-				long offset, long length)
+				off_t offset, off_t length)
 {
 	bsdsum_op_t *hf;
 	bsdsum_res_t res;
@@ -572,8 +586,11 @@ bsdsum_res_t bsdsum_digest_one (int ofile, bsdsum_op_t* ops,
 				return bsdsum_digest_lnk(ofile, ops, 
 							file, flags);
 		case S_IFBLK:
-			return bsdsum_digest_reg(file, &st, ops, offset,
+			res = bsdsum_digest_reg(file, &st, ops, offset,
 						length, flags | FLAG_RAW);
+			if (res != RES_OK)
+				return res;
+			break;
 		case S_IFCHR:
 		case S_IFIFO:
 		case S_IFSOCK:

@@ -7,7 +7,13 @@
 echo "bsdsum configure script"
 echo "-----------------------"
 
-OS=$(uname -s)
+OS=$(uname -s 2>/dev/null)
+if test -z "${OS}"
+then
+	echo "unable to determine the operating system"
+	exit 1
+fi
+ARCH=$(uname -m)
 VER=$(cat version)
 C_FLAGS="-Iinclude -Iexternal/libcrypto -Iexternal/blake"
 C_FLAGS="${C_FLAGS} -Iexternal/blake2 -Iexternal/blake3"
@@ -18,12 +24,23 @@ C_FLAGS="${C_FLAGS} -fstack-protector"
 PREFIX=/usr/local
 CC=
 OPTS=-O2
+LF=no
+WIDTH=32
+DEBUG=no
+
+case "${ARCH}" in
+	*arm64*) WIDTH=64 ;;
+	*x86_64*) WIDTH=64 ;;
+	*sparc64*) WIDTH=64 ;;
+	*mips64*) WIDTH=64 ;;
+esac
 
 help()
 {
 	echo "arguments:"
 	echo "  --prefix=    set prefix (default /usr/local)"
 	echo "  --cc=        set compiler (gcc, clang..)"
+	echo "  --debug      enable debugging"
 	echo
 }
 
@@ -41,6 +58,8 @@ case "${OS}" in
 	*linux*|*Linux*)
 		OS=LINUX
 		ln -s /usr/include/endian.h include/os_endian.h
+		C_FLAGS="${C_FLAGS} -D_FILE_OFFSET_BITS=64"
+		LF=yes
 		;;
 	NetBSD|OpenBSD|FreeBSD|DragonFly)
 		ln -s /usr/include/sys/endian.h include/os_endian.h
@@ -51,6 +70,11 @@ case "${OS}" in
 		exit 1
 		;;
 esac
+
+if test "${LF}" = "yes"
+then
+	C_FLAGS="${C_FLAGS} -DBSDSUM_LF"
+fi
 
 for A in $@
 do
@@ -64,6 +88,10 @@ do
 	--cc=*)
 		CC=${A#--cc=}
 		;;
+	--debug)
+		DEBUG=yes
+		C_FLAGS="${C_FLAGS} -BSDSUM_DEBUG -g"
+		;;
 	*)
 		echo "unknown argument ${A}"
 		exit 1
@@ -74,13 +102,15 @@ done
 TEST=$($CC --version 2>/dev/null)
 if test -z "$TEST"
 then
-	echo "no C compiler found"
+	echo "no working C compiler found"
 	exit 1
 fi
 
-echo "- os is ${OS}"
+echo "- os is ${OS} (${WIDTH}-bit)"
 echo "- prefix is ${PREFIX}"
 echo "- compiler is ${CC}"
+echo "- large files support: ${LF}"
+echo "- debugging: ${DEBUG}"
 echo
 echo "use 'make' to build out/bsdsum and run tests"
 echo "use 'make static' to build the static version out/bsdsum-static"
@@ -94,6 +124,7 @@ echo "CC := ${CC}" >> config.mk
 echo "C_FLAGS := ${C_FLAGS}" >> config.mk
 echo "OPTS := ${OPTS}" >> config.mk
 echo "PREFIX := ${PREFIX}" >> config.mk
+echo "DEBUG := ${DEBUG}" >> config.mk
 
 find . -name '*.o' -delete
 mkdir -p out
