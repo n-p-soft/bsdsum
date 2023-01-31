@@ -22,7 +22,6 @@
 #include <sys/mman.h>
 #include <sys/wait.h>
 #include <ctype.h>
-#include <err.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -41,13 +40,14 @@
 void bsdsum_digest_init (bsdsum_op_t *hf, int fd)
 {
 	if ((hf->ctx = calloc(1, sizeof(bsdsum_ctx_t))) == NULL)
-		errx(1, "out of memory");
+		bsdsum_log(LL_ERR|LL_FATAL, "out of memory");
 	memset(hf->digest, 0, sizeof(bsdsum_digest_t));
 	hf->digest_fd = fd;
 	hf->init(hf->ctx);
 }
 
-void bsdsum_digest_end (bsdsum_op_t *hf)
+/* end a digest and produce the encoded result into hf->fdigest */
+bsdsum_res_t bsdsum_digest_end (bsdsum_op_t *hf)
 {
 	hf->final(hf->digest, hf->ctx);
 	if (hf->style & STYLE_TXT) {
@@ -57,8 +57,10 @@ void bsdsum_digest_end (bsdsum_op_t *hf)
 	else if (hf->style & STYLE_B64) {
 		if (bsdsum_b64_ntop(hf->digest, hf->digestlen, 
 				hf->fdigest, sizeof(bsdsum_fdigest_t))
-				 == -1)
-			errx(1, "error encoding base64");
+				 == -1) {
+			bsdsum_log(LL_ERR, "error encoding base64");
+			return RES_ERROR;
+		}
 	}
 	else if (hf->style & STYLE_M32) {
 		char *s;
@@ -66,8 +68,11 @@ void bsdsum_digest_end (bsdsum_op_t *hf)
 
 		s = bsdsum_enc_32(hf->digest, hf->digestlen,
 					SET32_MIX, &olen);
-		if (s == NULL)
-			errx(1, "mix32 encoding not supported");
+		if (s == NULL) {
+			bsdsum_log(LL_ERR, "mix32 encoding failure");
+			free(s);
+			return RES_ERROR;
+		}
 		snprintf(hf->fdigest, sizeof(bsdsum_fdigest_t),
 				"%s", s);
 		free(s);
@@ -88,12 +93,16 @@ void bsdsum_digest_end (bsdsum_op_t *hf)
 	}
 	if (hf->digest_fd >= 0) {
 		if (write(hf->digest_fd, 
-			hf->digest, hf->digestlen) != hf->digestlen)
-			err(1, "could not store digest into temporary "
+			hf->digest, hf->digestlen) != hf->digestlen) {
+			bsdsum_log(LL_ERR, 
+				"could not store digest into temporary "
 				"file");
+			return RES_ERROR;
+		}
 	}
 	free(hf->ctx);
 	hf->ctx = NULL;
+	return RES_OK;
 }
 
 /* Output an encoded digest into file 'ofile'. */
@@ -141,11 +150,12 @@ static bsdsum_res_t bsdsum_digest_read(int fd, bsdsum_op_t *hf,
 	if (readbuf == NULL) {
 		readbuf = malloc(BUFFER_RAW_SZK*1024);
 		if (readbuf == NULL)
-			err(1, NULL);
+			bsdsum_log(LL_ERR|LL_FATAL,
+					"cannot allocate read buffer");
 	}
 
 	if (lseek(fd, offset, SEEK_SET) != offset) {
-		warnx("could not seek");
+		bsdsum_log(LL_ERR, "could not seek file");
 		return RES_ERROR;
 	}
 
@@ -155,7 +165,7 @@ static bsdsum_res_t bsdsum_digest_read(int fd, bsdsum_op_t *hf,
 		rd = read(fd, readbuf, len);
 		if (rd <= 0) {
 			close(fd);
-			warnx("could not read file");
+			bsdsum_log(LL_ERR, "could not read file");
 			return RES_ERROR;
 		}
 		for (o = hf; o; o = o->next) {
@@ -170,7 +180,8 @@ static bsdsum_res_t bsdsum_digest_read(int fd, bsdsum_op_t *hf,
 	for (o = hf; o; o = o->next) {
 		if (nosplit_only && (o->split > 1))
 			continue;	
-		bsdsum_digest_end(o);
+		if (bsdsum_digest_end(o) != RES_OK)
+			return RES_ERROR;
 		if (first_only)
 		       break;
 	}
@@ -198,12 +209,13 @@ static bsdsum_res_t bsdsum_digest_split(bsdsum_op_t *hf,
 
 	cdg = calloc(hf->split, hf->digestlen);
 	if (cdg == NULL)
-		errx(1, "out of memory");
+		bsdsum_log(LL_ERR|LL_FATAL, "out of memory");
 	for (i = 0; i < hf->split; i++) {
 		snprintf(tmp[i], 20, "/tmp/bsdsumXXXXXX");
 		fds[i] = mkstemp(tmp[i]);
 		if (fds[i] < 0) {
-			warnx("could not create temporary file");
+			bsdsum_log(LL_ERR, 
+				"could not create temporary file");
 			return RES_ERROR;
 		}
 	}
@@ -216,7 +228,7 @@ static bsdsum_res_t bsdsum_digest_split(bsdsum_op_t *hf,
 			length -= slen;
 		pids[i] = fork();
 		if (pids[i] < 0) {
-			warnx("could not fork");
+			bsdsum_log(LL_ERR, "could not fork");
 			res = RES_ERROR;
 			break;
 		}
@@ -229,7 +241,8 @@ static bsdsum_res_t bsdsum_digest_split(bsdsum_op_t *hf,
 			else {
 				fd = open(file, O_RDONLY);
 				if (fd < 0) {
-					warnx("could not open %s", file);
+					bsdsum_log(LL_ERR, 
+						"could not open %s", file);
 					exit(1);
 				}
 				if (bsdsum_digest_read(fd, hf, true, false,
@@ -269,14 +282,15 @@ static bsdsum_res_t bsdsum_digest_split(bsdsum_op_t *hf,
 			kill(pids[i], SIGKILL);
 	}
 	if ( ! allok) {
-		warnx("split digest failure");
+		bsdsum_log(LL_ERR, "split digest failure");
 		res = RES_ERROR;
 	}
 	for (i = 0; i < hf->split; i++) {
 		if ((lseek(fds[i], 0, SEEK_SET) != 0) ||
 			(read(fds[i], cdg+i*hf->digestlen, hf->digestlen) !=
 						hf->digestlen)) {
-			warnx("unable to read split-digest results");
+			bsdsum_log(LL_ERR, 
+				"unable to read split-digest results");
 			res = RES_ERROR;
 		}
 		close(fds[i]);
@@ -303,7 +317,7 @@ static bsdsum_res_t bsdsum_digest_file(const char* file,
        
 	fd = open(file, O_RDONLY);
 	if (fd < 0) {
-		warnx("could not open %s", file);
+		bsdsum_log(LL_ERR, "could not open %s", file);
 		return RES_ERROR;
 	}
 
@@ -346,8 +360,7 @@ bsdsum_res_t bsdsum_digest_mem (bsdsum_op_t *hf,
 	if (split < 2) {
 		bsdsum_digest_init(hf, -1);
 		hf->update(hf->ctx, buf, length);
-		bsdsum_digest_end(hf);
-		return RES_OK;
+		return bsdsum_digest_end(hf);
 	}
 	else
 		return bsdsum_digest_split(hf, NULL, buf, 0, length);
@@ -377,14 +390,15 @@ static bsdsum_res_t bsdsum_digest_reg (const char *file,
 	if (stsrc)
 		pst = stsrc;
 	else if (stat(file, &st)) {
-		warnx("cannot stat file %s", file);
+		bsdsum_log(LL_ERR, "cannot stat file %s", file);
 		return RES_ERROR;
 	}
 
 	if ((pst->st_mode & S_IFMT) == S_IFBLK) {
 		total = bsdsum_device_size(file); 
 		if (total == (off_t)(-1)) {
-			warn("block device not supported (%s)", file);
+			bsdsum_log(LL_ERR, 
+				"block device not supported (%s)", file);
 			return RES_ERROR;
 		}
 	}
@@ -394,17 +408,17 @@ static bsdsum_res_t bsdsum_digest_reg (const char *file,
 	if (offset < 0) 
 		offset = 0;
 	else if (offset >= total) {
-		warnx("bad offset specified");
+		bsdsum_log(LL_ERR, "bad offset specified");
 		return RES_ERROR;
 	}
 	if (length < 0) 
 		length = total - offset;
 	else if (length > total) {
-		warnx("bad length specified");
+		bsdsum_log(LL_ERR, "bad length specified");
 		return RES_ERROR;
 	}
 	if (offset + length > total) {
-		warnx("bad offset/length specified");
+		bsdsum_log(LL_ERR, "bad offset/length specified");
 		return RES_ERROR;
 	}
 
@@ -420,7 +434,7 @@ static bsdsum_res_t bsdsum_digest_reg (const char *file,
 	/* non-empty area to hash, open the target */
 	f = open(file, O_RDONLY);
 	if (f < 0) {
-		warnx("cannot open file %s", file);
+		bsdsum_log(LL_ERR, "cannot open file %s", file);
 		close(f);
 		return RES_ERROR;
 	}
@@ -447,7 +461,7 @@ static bsdsum_res_t bsdsum_digest_reg (const char *file,
 		munmap(base, total);
 	close(f);
 	if (r) {
-		warnx("could not digest file %s", file);
+		bsdsum_log(LL_ERR, "could not digest file %s", file);
 		return RES_ERROR;
 	}
 
@@ -463,7 +477,7 @@ static bsdsum_res_t bsdsum_digest_lnk(int ofile,
 	char rlnk[PATH_MAX+1];
 
 	if (readlink(file, rlnk, MAX_PATH) < 0) {
-		warnx("could not read link %s", file);
+		bsdsum_log(LL_ERR, "could not read link %s", file);
 		return RES_ERROR;
 	}
 
@@ -486,7 +500,8 @@ static bsdsum_res_t bsdsum_digest_dir(int ofile,
 
 	d = opendir(dir);
 	if (d == NULL) {
-		warnx("unable to access directory %s\n", dir);
+		bsdsum_log(LL_ERR, 
+			"unable to access directory %s\n", dir);
 		return RES_ERROR;
 	}
 	while(1) {
@@ -496,7 +511,8 @@ static bsdsum_res_t bsdsum_digest_dir(int ofile,
 		if (dr == NULL) {
 			closedir(d);
 			if (errno != 0) {
-				warnx("directory access error (%s)\n", dir);
+				bsdsum_log(LL_ERR, 
+				"directory access error (%s)\n", dir);
 				return RES_ERROR;
 			}
 			return res;
@@ -508,7 +524,8 @@ static bsdsum_res_t bsdsum_digest_dir(int ofile,
 			 continue;
 		}
 		if (strlen(dir)+strlen(dr->d_name) >= MAX_PATH) {
-			warnx("too long path (%s, %s)", dir, dr->d_name);
+			bsdsum_log(LL_ERR, 
+				"too long path (%s, %s)", dir, dr->d_name);
 			closedir(d);
 			return RES_ERROR;
 		}
@@ -548,20 +565,26 @@ bsdsum_res_t bsdsum_digest_one (int ofile, bsdsum_op_t* ops,
 					BUFFER_STDIN_SZK*1024, stdin)) != 0) {
 			if (flags & FLAG_P) {
 				(void)fwrite(data, nread, 1UL, stdout);
-				if (fflush(stdout) != 0)
-					err(1, "stdout: write error");
+				if (fflush(stdout) != 0) {
+					bsdsum_log(LL_ERR,
+						"stdout: write error");
+					return RES_ERROR;
+				}
 			}
 			for (hf = ops; hf; hf = hf->next) {
 				hf->update(hf->ctx, 
 					(unsigned char*)data, nread);
 			}
 		}
-		for (hf = ops; hf; hf = hf->next) 
-			bsdsum_digest_end(hf);
+		for (hf = ops; hf; hf = hf->next) {
+			if (bsdsum_digest_end(hf) != RES_OK)
+				res = RES_ERROR;
+		}
 	}
 	else {
 		if (stat(file, &st)) {
-			warnx("unable to stat file %s\n", file);
+			bsdsum_log(LL_ERR, 
+				"unable to stat file %s\n", file);
 			return RES_ERROR;
 		}
 		switch(st.st_mode & S_IFMT) {
@@ -576,7 +599,8 @@ bsdsum_res_t bsdsum_digest_one (int ofile, bsdsum_op_t* ops,
 				return bsdsum_digest_dir(ofile, ops, 
 							file, flags);
 			else {
-				warnx("skipping directory %s", file);
+				bsdsum_log(LL_WARN, 
+					"skipping directory %s", file);
 				return RES_SKIPPED;
 			}
 		case S_IFLNK:
@@ -594,8 +618,9 @@ bsdsum_res_t bsdsum_digest_one (int ofile, bsdsum_op_t* ops,
 		case S_IFCHR:
 		case S_IFIFO:
 		case S_IFSOCK:
-			warnx("skipping file %s (unsupported type)",
-				       	file);
+			bsdsum_log(LL_WARN, 
+				"skipping file %s (unsupported type)",
+			       	file);
 			return RES_SKIPPED;
 		}
 	}
@@ -607,6 +632,6 @@ bsdsum_res_t bsdsum_digest_one (int ofile, bsdsum_op_t* ops,
 		else
 			bsdsum_digest_print(ofile, hf, file);
 	}
-	return RES_OK;
+	return res;
 }
 

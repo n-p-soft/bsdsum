@@ -130,6 +130,7 @@ typedef enum {
 	LL_VERBOSE = 8, /* some additional messages */
 	LL_DEBUG = 0x10, /* debug messages */
 	LL_DEF = LL_ERR | LL_WARN, /* default behaviour (warnings+error) */
+	LL_FATAL = 0x20, /* end program */
 } bsdsum_ll_t;
 
 /* Operation to run on a list of digests */
@@ -224,7 +225,7 @@ bsdsum_res_t bsdsum_digest_mem (bsdsum_op_t *hf,
 				unsigned char* buf, 
 				off_t length, int split);
 void bsdsum_digest_init(bsdsum_op_t *hf, int fd);
-void bsdsum_digest_end(bsdsum_op_t *);
+bsdsum_res_t bsdsum_digest_end(bsdsum_op_t *);
 bsdsum_res_t bsdsum_digest_one (int ofile, bsdsum_op_t* ops, 
 				const char *file, bsdsum_flag_t flags,
 				off_t offset, off_t length);

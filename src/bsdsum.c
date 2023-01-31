@@ -28,7 +28,6 @@
 #include <sys/mman.h>
 #include <sys/wait.h>
 #include <ctype.h>
-#include <err.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -59,7 +58,7 @@ static bsdsum_op_t* bsdsum_add_op (bsdsum_t *bs, bsdsum_op_t *hf,
 
 	hftmp = calloc(1, sizeof(bsdsum_op_t));
 	if (hftmp == NULL)
-		err(1, "out of memory");
+		bsdsum_log(LL_ERR|LL_FATAL, "out of memory");
 	memcpy(hftmp, hf, sizeof(bsdsum_op_t));
 	hftmp->next = NULL;
 	if (hf->use_style & STYLE_FIXED)
@@ -146,19 +145,24 @@ static void bsdsum_setup(bsdsum_t* bs, int argc, char **argv)
 	/* check command-line options */
 	if ((bs->length >= 0 || bs->offset >= 0)) {
 		if (bs->argc != 1)
-			errx(1, "one file (and only one) must be "
+			bsdsum_log(LL_ERR|LL_FATAL, 
+					"one file (and only one) must be "
 					"specified with -f/-l");
 		if (bs->flags & (FLAG_P | FLAG_K | FLAG_C | FLAG_CSEL |
 					FLAG_R))
-			errx(1, "non-compatible options on command-line");
+			bsdsum_log(LL_ERR|LL_FATAL, 
+				"non-compatible options on command-line");
 	}
 	if (bs->selective_checklist != NULL && bs->argc == 0)
-		errx(1, "missing selection of files to check");
+		bsdsum_log(LL_ERR|LL_FATAL, 
+			"missing selection of files to check");
 	if ((bs->flags & FLAG_C) && bs->argc == 0)
-		errx(1, "missing list(s) of digests to check");
+		bsdsum_log(LL_ERR|LL_FATAL, 
+			"missing list(s) of digests to check");
 	if ((bs->flags & FLAG_R) && 
 		(bs->flags & (FLAG_C | FLAG_CSEL | FLAG_P)))
-		errx(1, "non-compatible option -r on command-line");
+		bsdsum_log(LL_ERR|LL_FATAL, 
+			"non-compatible option -r on command-line");
 	if (bs->flags & FLAG_C)
 		fl++;
 	if (bs->flags & FLAG_P)
@@ -166,13 +170,16 @@ static void bsdsum_setup(bsdsum_t* bs, int argc, char **argv)
 	if (bs->flags & FLAG_CSEL)
 		fl++;
 	if (fl > 1) 
-		errx(1, "-p, -C and -c are exclusive");
+		bsdsum_log(LL_ERR|LL_FATAL, 
+				"-p, -C and -c are exclusive");
 	if (fl && (bs->flags & (FLAG_K | FLAG_R)))
-		errx(1, "non-compatible options on command-line");
+		bsdsum_log(LL_ERR|LL_FATAL, 
+			"non-compatible options on command-line");
 	if (bs->selective_checklist || (bs->flags & FLAG_C)) {
 		if (bsdsum_count_op(bs) > 1)
-			errx(1, "only one algorithm may be specified "
-			    "in -C or -c mode");
+			bsdsum_log(LL_ERR|LL_FATAL, 
+				"only one algorithm may be specified "
+				"in -C or -c mode");
 	}
 
 	/* default alg and style */
@@ -184,7 +191,8 @@ static void bsdsum_setup(bsdsum_t* bs, int argc, char **argv)
 	/* split mode constrainsts */
 	if (bs->flags & FLAG_SPLIT) {
 		if ((bs->flags & FLAG_P) || bs->argc == 0)
-			errx(1, "split digest not usable on stdin");
+			bsdsum_log(LL_ERR|LL_FATAL, 
+				"split digest not usable on stdin");
 	}
 }
 
@@ -220,17 +228,20 @@ static void bsdsum_parse(bsdsum_t* bs, int argc, char** argv)
 			else if (strcasecmp("binary", optarg) == 0)
 				bs->style = STYLE_BIN;
 			else if (strcmp("default", optarg))
-				errx(1, "unknown style: %s", optarg);
+				bsdsum_log(LL_ERR|LL_FATAL, 
+					"unknown style: %s", optarg);
 			break;
 		case 'l':
 			bs->length = strtol(optarg, &endptr, 0);
 			if ((bs->length < 0) || (endptr && *endptr))
-				errx(1, "bad value for -l");
+				bsdsum_log(LL_ERR|LL_FATAL, 
+					"bad value for -l");
 			break;
 		case 'f':
 			bs->offset = strtol(optarg, &endptr, 0);
 			if ((bs->offset < 0) || (endptr && *endptr))
-				errx(1, "bad value for -f");
+				bsdsum_log(LL_ERR|LL_FATAL, 
+					"bad value for -f");
 			break;
 		case '?':
 			bsdsum_help();
@@ -241,7 +252,8 @@ static void bsdsum_parse(bsdsum_t* bs, int argc, char** argv)
 		if (bs->style == STYLE_NONE)
 			bs->style = STYLE_TERSE;
 		else if (bs->style != STYLE_TERSE)
-			errx(1, "-f/-l implies -s terse");
+			bsdsum_log(LL_ERR|LL_FATAL, 
+					"-f/-l implies -s terse");
 	}
 	if (bs->style == STYLE_NONE)
 		bs->style = STYLE_HEXA;
@@ -257,8 +269,9 @@ static void bsdsum_parse(bsdsum_t* bs, int argc, char** argv)
 				a_opts++;
 				hf = bsdsum_op_find_alg(cp, bs->style, 0);
 				if (hf == NULL) 
-					errx(1, "unsupported algorithm and/or"
-						       " style");
+					bsdsum_log(LL_ERR|LL_FATAL, 
+					"unsupported algorithm and/or"
+					" style");
 				hf = bsdsum_add_op(bs, hf, bs->style);
 				if (hf->split >= 2)
 					bs->flags |= FLAG_SPLIT;

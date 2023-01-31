@@ -167,7 +167,7 @@ bsdsum_op_t* bsdsum_op_find_alg (const char *cp,
 		l = strtol(p, &endptr, 10);
 		if ((endptr && *endptr) || 
 			(l <= 1) || (l > MAX_SPLIT)) {
-			warnx( "bad algorithm name \"%s:%s\"", cp, p);
+			bsdsum_log(LL_WARN,  "bad algorithm name \"%s:%s\"", cp, p);
 			return NULL;
 		}
 	}
@@ -175,18 +175,18 @@ bsdsum_op_t* bsdsum_op_find_alg (const char *cp,
 	hf = bsdsum_op_get(cp);
 	if (hf == NULL || hf->name == NULL) {
 		if ( ! quiet)
-			warnx("unknown algorithm \"%s\"", cp);
+			bsdsum_log(LL_WARN, "unknown algorithm \"%s\"", cp);
 		return NULL;
 	}
 	if ((hf->use_style & STYLE_NOSPLIT) && l) {
 		if ( ! quiet)
-			warnx("algorithm \"%s\" does not support split", cp);
+			bsdsum_log(LL_WARN, "algorithm \"%s\" does not support split", cp);
 		return NULL;
 	}
 	if ((style != STYLE_NONE) && ! (hf->use_style & STYLE_FIXED)) {
 		if ((hf->use_style & style) != style) {
 			if ( ! quiet)
-				warnx("%s doesn't support given style", 
+				bsdsum_log(LL_WARN, "%s doesn't support given style", 
 					hf->name);
 			return NULL;
 		}

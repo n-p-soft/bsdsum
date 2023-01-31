@@ -22,7 +22,6 @@
 #include <sys/mman.h>
 #include <sys/wait.h>
 #include <ctype.h>
-#include <err.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -45,7 +44,7 @@ static char* bsdsum_dgl_getline(int fd, int* eof, const char *filename)
 	char c;
 
 	if (l == NULL)
-		errx(1, "out of memory");
+		bsdsum_log(LL_ERR|LL_FATAL, "out of memory");
 	*eof = 0;
 	for (n = 0; n < max; n++) {
 		switch (read(fd, &c, 1)) {
@@ -81,7 +80,7 @@ bsdsum_dgl_par_t *bsdsum_dgl_start(bsdsum_dgl_cmd_t cmd,
 
 	par = calloc(1, sizeof(bsdsum_dgl_par_t));
 	if (par == NULL)
-		err(1, NULL);
+		bsdsum_log(LL_ERR|LL_FATAL, "out of memory");
 
 	par->cmd = cmd;
 	par->flags = flags;
@@ -125,13 +124,13 @@ static bsdsum_res_t bsdsum_dgl_check_line(bsdsum_dgl_par_t *par,
 
 	st = bsdsum_dgl_parse_line(line, &filename, &checksum, &hf);
 	if (st == STYLE_UNSUPPORTED) {
-		warnx("line %i: unsupported algorithm", 
+		bsdsum_log(LL_WARN, "line %i: unsupported algorithm", 
 			par->lineno);
 		par->l_error++;
 		return RES_CONTINUE;
 	}
 	else if (st == STYLE_ERROR) {
-		warnx("line %i: format not recognized", 
+		bsdsum_log(LL_WARN, "line %i: format not recognized", 
 			par->lineno);
 		par->l_syntax++;
 		return RES_CONTINUE;
@@ -174,7 +173,7 @@ static bsdsum_res_t bsdsum_dgl_check_line(bsdsum_dgl_par_t *par,
 		printf("(%s) %s: %s\n", algorithm, filename,
 		    (d_error == ENOENT ? "MISSING" : "FAILED"));
 		if (d_error != ENOENT)
-			warnx("cannot digest %s", filename);
+			bsdsum_log(LL_WARN, "cannot digest %s", filename);
 		par->l_error++;
 	}
 	else {
@@ -268,7 +267,7 @@ bsdsum_res_t bsdsum_dgl_process(bsdsum_dgl_par_t *par)
 	int fflags;
 
 	if (par == NULL) {
-		warnx("missing parameters");
+		bsdsum_log(LL_WARN, "missing parameters");
 		return RES_ERR_PAR;
 	}	
 
@@ -283,12 +282,12 @@ bsdsum_res_t bsdsum_dgl_process(bsdsum_dgl_par_t *par)
 			par->listfd = 0;
 			par->std = 1;
 		} else if (par->path == NULL) {
-			warnx("missing target path");
+			bsdsum_log(LL_WARN, "missing target path");
 			return RES_ERR_PAR;
 		} else {
 			par->listfd = open(par->path, fflags);
 			if (par->listfd < 0) {
-				warn("cannot open %s", par->path);
+				bsdsum_log(LL_WARN, "cannot open %s", par->path);
 				return RES_ERR_IO;
 			}
 		}
@@ -308,7 +307,8 @@ bsdsum_res_t bsdsum_dgl_process(bsdsum_dgl_par_t *par)
 		par->files_found = calloc((size_t)par->files_count, 
 						sizeof(int));
 		if (par->files_found == NULL)
-			err(1, NULL);
+			bsdsum_log(LL_ERR|LL_FATAL,
+					"out of memory");
 	}
 
 	/* run the command */
@@ -342,18 +342,18 @@ bsdsum_res_t bsdsum_dgl_process(bsdsum_dgl_par_t *par)
 
 	if (par->l_skipped) {
 		if (par->path)
-			warnx("%s: %i item(s) skipped", 
+			bsdsum_log(LL_WARN, "%s: %i item(s) skipped", 
 					par->path, par->l_skipped);
 		else
-			warnx("%i item(s) skipped", 
+			bsdsum_log(LL_WARN, "%i item(s) skipped", 
 				par->l_skipped);
 	}
 	if (par->l_syntax) {
 		if (par->path)
-			warnx("%s: found %i ill-formatted line(s)", 
+			bsdsum_log(LL_WARN, "%s: found %i ill-formatted line(s)", 
 					par->path, par->l_syntax);
 		else
-			warnx("found %i ill-formatted line(s)", 
+			bsdsum_log(LL_WARN, "found %i ill-formatted line(s)", 
 					par->l_syntax);
 		/* force one error for these lines */
 		res |= RES_ERROR;
@@ -365,7 +365,7 @@ bsdsum_res_t bsdsum_dgl_process(bsdsum_dgl_par_t *par)
 
 		for (i = 0; i < par->files_count; i++) {
 			if (par->files_found[i] == 0) {
-				warnx("%s was not found",
+				bsdsum_log(LL_WARN, "%s was not found",
 					par->files[i]);
 				res |= RES_ERROR;
 			}

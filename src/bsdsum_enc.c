@@ -18,7 +18,6 @@
 
 #include <stdlib.h>
 #include <stdio.h>
-#include <err.h>
 #include <string.h>
 #include "bsdsum.h"
 
@@ -82,7 +81,7 @@ char* bsdsum_enc_32 (const unsigned char *data, size_t len,
 
 	out = calloc(*olen + 1, 1);
 	if (out == NULL)
-		errx(1, "out of memory");
+		bsdsum_log(LL_ERR|LL_FATAL, "out of memory");
 	for (i = 0, n = 0; i < 8*len; i += 5, n++) {
 		unsigned char c = 0;
 		int max;

@@ -83,7 +83,7 @@ bsdsum_ll_t bsdsum_log_level = LL_DEF;
 /* our logging function */
 void bsdsum_log(bsdsum_ll_t lvl, const char *fmt, ...)
 {
-	char buf[512];
+	char buf[2048];
 	va_list va;
 
 	if ( ! (lvl & bsdsum_log_level))
@@ -93,5 +93,7 @@ void bsdsum_log(bsdsum_ll_t lvl, const char *fmt, ...)
 	vsnprintf(buf, 512, fmt, va);
 	va_end(va);
 	fprintf(stderr, "bsdsum: %s", buf);
+	if (lvl & LL_FATAL)
+		exit(1);
 }
 
