@@ -26,10 +26,18 @@ all:
 		A=$$(grep "$$C" /tmp/bsdst); \
 		test "-$${A}-" = "-$${C}-" || exit 1
 	@echo "* CSEL2"; $(PRG) -v verbose -v file=/tmp/bsdst \
-	      	-C sums a z 2>/dev/null; \
+	      	-C sums a z 1>/dev/null 2>/dev/null; \
 		A=$$(grep "z was not found nor checked" /tmp/bsdst); \
 		test -n "$${A}" || exit 1
 	@echo "* CSTDIN"; cat sums | $(PRG) -c -v nothing; \
 		exit $$?
+	@echo "* CPREPEND"; \
+		A=$$($(PRG) -d sub -c sumsubpr > /tmp/bsdst); \
+		B=$$(grep OK /tmp/bsdst | wc -l); \
+		test "$$B" = "2" || exit 1
+	@echo "* HPREPEND"; \
+		A=$$($(PRG) -d sub a 2>/dev/null); \
+	        test "$$A" = "$$(cat sumsubpr2)" || exit 1	
+
 
 

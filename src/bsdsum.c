@@ -249,7 +249,7 @@ static void bsdsum_parse(bsdsum_t* bs, int argc, char** argv)
 				bs->log_lvl = LL_DEF|LL_VERBOSE|
 						LL_DEBUG;
 			else if (strcasecmp("errors", optarg) == 0)
-				bs->log_lvl = LL_ERR;
+				bs->log_lvl &= ~ LL_WARN;
 			else if (strcasecmp("nothing", optarg) == 0)
 				bs->log_lvl = LL_NONE;
 			else if (strncmp("file=", optarg, 5) == 0) 
@@ -335,6 +335,7 @@ static void bsdsum_parse(bsdsum_t* bs, int argc, char** argv)
 			break;
 		case 'd':
 			bs->prepend = optarg;
+			break;
 		case 'o':
 			bs->opath = optarg;
 			break;

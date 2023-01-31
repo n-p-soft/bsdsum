@@ -121,6 +121,7 @@ static bsdsum_res_t bsdsum_dgl_check_line(bsdsum_dgl_par_t *par,
 	bsdsum_style_t st;
 	char algorithm[32];
 	int skip = 0;
+	char *pfname = NULL;
 
 	st = bsdsum_dgl_parse_line(line, &filename, &checksum, &hf);
 	if (st == STYLE_UNSUPPORTED) {
@@ -166,15 +167,29 @@ static bsdsum_res_t bsdsum_dgl_check_line(bsdsum_dgl_par_t *par,
 		snprintf(algorithm, 32, "%s", hf->name);
 
 	/* hash the file */
-	d_error = bsdsum_digest_one(par->listfd, hf,
-					filename,  par->flags,
-					-1, -1);
+	bsdsum_log(LL_VERBOSE, "checking %s", filename);
+	if (par->prepend) {
+		pfname = bsdsum_concat(par->prepend, filename);
+		d_error = bsdsum_digest_one(par->listfd, hf,
+						pfname,  par->flags,
+						-1, -1);
+		free(pfname);
+	}
+	else {
+		d_error = bsdsum_digest_one(par->listfd, hf,
+						filename,  par->flags,
+						-1, -1);
+	}
+
 	if (d_error) {
-		printf("(%s) %s: %s\n", algorithm, filename,
-		    (d_error == ENOENT ? "MISSING" : "FAILED"));
+		bsdsum_log(LL_STDOUT,
+			"(%s) %s: %s\n", algorithm, filename,
+			(d_error == ENOENT ? "MISSING" : "SKIPPED"));
 		if (d_error != ENOENT)
-			bsdsum_log(LL_ERR, "cannot digest %s", filename);
+			bsdsum_log(LL_ERR, "%s: %s", filename,
+					strerror(d_error));
 		par->l_error++;
+		par->l_skipped++;
 	}
 	else {
 		if (bsdsum_op_case_sensitive(hf->style))
@@ -183,8 +198,7 @@ static bsdsum_res_t bsdsum_dgl_check_line(bsdsum_dgl_par_t *par,
 			cmp = strcasecmp(checksum, hf->fdigest);
 		if (cmp == 0) {
 			bsdsum_log(LL_STDOUT,
-				"(%s) %s: OK\n", algorithm,
-				    filename);
+				"(%s) %s: OK\n", algorithm, filename);
 			par->l_ok++;
 		} else {
 			bsdsum_log(LL_STDOUT|LL_ERR,
@@ -243,12 +257,22 @@ static bsdsum_res_t bsdsum_dgl_hash(bsdsum_dgl_par_t *par)
 	bsdsum_res_t res = RES_OK;
 	bsdsum_res_t lres;
 	int i;
+	char *s = NULL;
 
 	for (i = 0; i < par->files_count; i++) {
 		bsdsum_log(LL_VERBOSE, "hashing %s", par->files[i]);
-		lres = bsdsum_digest_one(par->listfd, par->algs,
-		  			par->files[i], par->flags,
-					par->offset, par->length);
+		if (par->prepend) {
+			s = bsdsum_concat(par->prepend, par->files[i]);
+			lres = bsdsum_digest_one(par->listfd, par->algs,
+		  				s, par->flags,
+						par->offset, par->length);
+			free(s);
+		}
+		else {
+			lres = bsdsum_digest_one(par->listfd, par->algs,
+			  			par->files[i], par->flags,
+						par->offset, par->length);
+		}
 		if (lres & RES_SKIPPED)
 			par->l_skipped++;
 		if (lres & RES_ERROR) {
@@ -359,7 +383,8 @@ static bsdsum_res_t bsdsum_dgl_check_sel(bsdsum_dgl_par_t *par)
 {
 	bsdsum_res_t res = RES_OK;
 
-	/* no selection ? check the whole list. */
+	/* no selection ? check the whole list. Normally this
+	 * would not occur if called from bsdsum.c. */
 	if (par->files == NULL)
 		return bsdsum_dgl_check_one(par, par->path, -1);
 

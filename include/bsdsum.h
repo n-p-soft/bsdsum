@@ -129,9 +129,9 @@ typedef enum {
 	LL_WARN = 4, /* output warnings */
 	LL_VERBOSE = 8, /* some additional messages */
 	LL_DEBUG = 0x10, /* debug messages */
-	LL_DEF = LL_ERR | LL_WARN, /* default behaviour (warnings+error) */
 	LL_FATAL = 0x20, /* end program */
-	LL_STDOUT = 0x40, /* also output to stdout (unless LL_NONE) */
+	LL_STDOUT = 0x40, /* output to stdout, not stderr (unless LL_NONE) */
+	LL_DEF = LL_ERR | LL_WARN | LL_STDOUT, /* default behaviour (warnings+error) */
 } bsdsum_ll_t;
 
 /* Operation to run on a list of digests */
@@ -257,6 +257,7 @@ char* bsdsum_getline(int fd, int* eof, const char *filename);
 off_t bsdsum_device_size(const char* dev);
 void explicit_bzero(void* p, size_t sz);
 void bsdsum_log(bsdsum_ll_t lvl, const char *fmt, ...);
+char *bsdsum_concat(const char *a, const char *b);
 extern bsdsum_ll_t bsdsum_log_level;
 extern int bsdsum_log_fd;
 

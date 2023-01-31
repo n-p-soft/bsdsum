@@ -69,7 +69,7 @@ src/bsdsum.o: src/bsdsum.c
 .c.o:
 	$(CC) -c -o $@ $(CFLAGS) $(OPTS) $<
 
-out/bsdsum: config.mk $(OBJS)
+out/bsdsum: config.mk include/bsdsum.h $(OBJS)
 	@mkdir -p out
 	@$(CC) -o out/bsdsum $(CFLAGS) $(OBJS) && \
 		echo "bsdsum compiled."	

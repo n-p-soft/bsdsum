@@ -106,8 +106,35 @@ void bsdsum_log(bsdsum_ll_t lvl, const char *fmt, ...)
 		dprintf(bsdsum_log_fd, "%s", buf, strlen(buf));
 	if (lvl & LL_STDOUT)
 		fprintf(stdout, "%s", buf, strlen(buf));
-	fprintf(stderr, "bsdsum: %s", buf);
+	else
+		fprintf(stderr, "bsdsum: %s", buf);
 	if (lvl & LL_FATAL)
 		exit(1);
+}
+
+/* dynamic concat */
+char *bsdsum_concat(const char *a, const char *b)
+{
+	char *s;
+
+	if (a == NULL) {
+		if (b == NULL)
+			return NULL;
+		else
+			s = strdup(b);
+	}
+	else if (b == NULL)
+		s = strdup(a);
+	else {
+		size_t lena = strlen(a);
+		size_t lenb = strlen(b);
+
+		s = malloc(lena + lenb + 1);
+		if (s)
+			snprintf(s, lena + lenb + 1, "%s%s", a ,b);
+		else
+			bsdsum_log(LL_ERR|LL_FATAL, "out of memory");
+	}
+	return s;
 }
 
