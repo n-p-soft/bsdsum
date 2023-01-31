@@ -22,7 +22,6 @@
 #include <sys/mman.h>
 #include <sys/wait.h>
 #include <ctype.h>
-#include <err.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>

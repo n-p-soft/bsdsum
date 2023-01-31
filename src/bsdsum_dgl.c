@@ -285,7 +285,11 @@ bsdsum_res_t bsdsum_dgl_process(bsdsum_dgl_par_t *par)
 			bsdsum_log(LL_WARN, "missing target path");
 			return RES_ERR_PAR;
 		} else {
-			par->listfd = open(par->path, fflags);
+			if (fflags & O_CREAT)
+				par->listfd = open(par->path, 
+						fflags, 0600);
+			else
+				par->listfd = open(par->path, fflags);
 			if (par->listfd < 0) {
 				bsdsum_log(LL_WARN, "cannot open %s", par->path);
 				return RES_ERR_IO;

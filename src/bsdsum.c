@@ -46,6 +46,7 @@ static void bsdsum_init (bsdsum_t *bs)
 	bs->length = -1;
 	bs->offset = -1;
 	bs->log_lvl = LL_DEF;
+	bs->log_fd = -1;
 }
 
 
@@ -226,6 +227,8 @@ static void bsdsum_parse(bsdsum_t* bs, int argc, char** argv)
 				bs->log_lvl = LL_ERR;
 			else if (strcasecmp("nothing", optarg) == 0)
 				bs->log_lvl = LL_NONE;
+			else if (strncmp("file=", optarg, 5) == 0) 
+				bs->log = optarg + 5;
 			else
 				bsdsum_log(LL_ERR|LL_FATAL, 
 					"unknown message filter: %s", 
@@ -244,7 +247,7 @@ static void bsdsum_parse(bsdsum_t* bs, int argc, char** argv)
 				bs->style = STYLE_TERSE;
 			else if (strcasecmp("binary", optarg) == 0)
 				bs->style = STYLE_BIN;
-			else if (strcasecmp("default", optarg))
+			else if (strcasecmp("default", optarg) == 0)
 				bs->style = STYLE_HEXA;
 			else
 				bsdsum_log(LL_ERR|LL_FATAL, 
@@ -266,6 +269,14 @@ static void bsdsum_parse(bsdsum_t* bs, int argc, char** argv)
 			bsdsum_help();
 			exit(1);
 		}
+	}
+	if (bs->log) {
+		bs->log_fd = open(bs->log, 
+				O_CREAT|O_TRUNC|O_WRONLY, 0600);
+		if (bs->log_fd < 0)
+			bsdsum_log(LL_ERR|LL_FATAL,
+				"unable to open log file %s", bs->log);
+		bsdsum_log_fd = bs->log_fd;
 	}
 	bsdsum_log_level = bs->log_lvl;
 	if (bs->length >= 0 || bs->offset >= 0) {
@@ -336,6 +347,8 @@ static void bsdsum_parse(bsdsum_t* bs, int argc, char** argv)
 
 static void bsdsum_end(bsdsum_t* bs)
 {
+	if (bs->log_fd > 0)
+		close(bs->log_fd);
 }
 
 int main (int argc, char **argv)

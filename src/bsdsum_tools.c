@@ -23,7 +23,6 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <err.h>
 #ifdef OS_LINUX
 #include <linux/fs.h>
 #endif
@@ -80,18 +79,32 @@ off_t bsdsum_device_size(const char* dev)
 /* current log level */
 bsdsum_ll_t bsdsum_log_level = LL_DEF;
 
+/* additional log file */
+int bsdsum_log_fd = -1;
+
 /* our logging function */
 void bsdsum_log(bsdsum_ll_t lvl, const char *fmt, ...)
 {
-	char buf[2048];
+	char buf[1310];
 	va_list va;
+	size_t len;
+
+	if (fmt == NULL)
+		return;
 
 	if ( ! (lvl & bsdsum_log_level))
 		return;
 
 	va_start(va, fmt);
-	vsnprintf(buf, 512, fmt, va);
+	vsnprintf(buf, 1300, fmt, va);
+	if (fmt[strlen(fmt)-1] != '\n') {
+		buf[strlen(buf)+1] = 0;
+		buf[strlen(buf)] = '\n';
+	}
 	va_end(va);
+	if (bsdsum_log_fd > 0)
+		dprintf(bsdsum_log_fd, "%s",
+				buf, strlen(buf));
 	fprintf(stderr, "bsdsum: %s", buf);
 	if (lvl & LL_FATAL)
 		exit(1);

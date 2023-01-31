@@ -190,6 +190,8 @@ typedef struct {
 	bsdsum_res_t res;
 	int error;
 	bsdsum_ll_t log_lvl;
+	const char* log;
+	int log_fd;
 } bsdsum_t;
 
 /* length in KB of buffer for stdin input */
@@ -252,6 +254,7 @@ off_t bsdsum_device_size(const char* dev);
 void explicit_bzero(void* p, size_t sz);
 void bsdsum_log(bsdsum_ll_t lvl, const char *fmt, ...);
 extern bsdsum_ll_t bsdsum_log_level;
+extern int bsdsum_log_fd;
 
 #ifdef BSDSUM_DEBUG
 #define DBG(FMT,...) bsdsum_log(LL_DEBUG, FMT, __VA_ARGS__)

@@ -74,6 +74,8 @@ void bsdsum_help (void)
 	"             default: display errors and warnings\n"
 	"             verbose: default + additional messages\n"
 	"             debug: default + debug messages (if enabled)\n"
+	"             file=PATH: output any message to PATH (in addtion\n"
+	"                        to standard error if not disabled)\n"
 	"  [file ...]\n");
 }
 
