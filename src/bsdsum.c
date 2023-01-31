@@ -45,7 +45,7 @@ static void bsdsum_init (bsdsum_t *bs)
 	memset(bs, 0, sizeof(bsdsum_t));
 	bs->length = -1;
 	bs->offset = -1;
-	bs->out_lvl = LL_DEF;
+	bs->log_lvl = LL_DEF;
 }
 
 
@@ -202,7 +202,7 @@ static void bsdsum_parse(bsdsum_t* bs, int argc, char** argv)
 {
 	bsdsum_op_t *hf, *hftmp;
 	char *cp;
-	const char *optstr = "a:C:co:hprkts:f:l:";
+	const char *optstr = "a:C:co:v:hprkts:f:l:";
 	char* endptr;
 	int i, fl;
 	int a_opts = 0;
@@ -213,6 +213,23 @@ static void bsdsum_parse(bsdsum_t* bs, int argc, char** argv)
 		case 'h':
 			bsdsum_help();
 			exit(0);
+			break;
+		case 'v':
+			if (strcasecmp("default", optarg) == 0)
+				bs->log_lvl = LL_DEF;
+			else if (strcasecmp("verbose", optarg) == 0)
+				bs->log_lvl = LL_DEF|LL_VERBOSE;
+			else if (strcasecmp("debug", optarg) == 0)
+				bs->log_lvl = LL_DEF|LL_VERBOSE|
+						LL_DEBUG;
+			else if (strcasecmp("errors", optarg) == 0)
+				bs->log_lvl = LL_ERR;
+			else if (strcasecmp("nothing", optarg) == 0)
+				bs->log_lvl = LL_NONE;
+			else
+				bsdsum_log(LL_ERR|LL_FATAL, 
+					"unknown message filter: %s", 
+					optarg);
 			break;
 		case 's':
 			if (strcasecmp("base64", optarg) == 0) 
@@ -227,7 +244,9 @@ static void bsdsum_parse(bsdsum_t* bs, int argc, char** argv)
 				bs->style = STYLE_TERSE;
 			else if (strcasecmp("binary", optarg) == 0)
 				bs->style = STYLE_BIN;
-			else if (strcmp("default", optarg))
+			else if (strcasecmp("default", optarg))
+				bs->style = STYLE_HEXA;
+			else
 				bsdsum_log(LL_ERR|LL_FATAL, 
 					"unknown style: %s", optarg);
 			break;
@@ -248,6 +267,7 @@ static void bsdsum_parse(bsdsum_t* bs, int argc, char** argv)
 			exit(1);
 		}
 	}
+	bsdsum_log_level = bs->log_lvl;
 	if (bs->length >= 0 || bs->offset >= 0) {
 		if (bs->style == STYLE_NONE)
 			bs->style = STYLE_TERSE;
@@ -302,6 +322,7 @@ static void bsdsum_parse(bsdsum_t* bs, int argc, char** argv)
 		case 'f':
 		case 'l':
 		case 's':
+		case 'v':
 			/* already processed */
 			break;
 		default:

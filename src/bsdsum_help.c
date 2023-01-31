@@ -68,6 +68,12 @@ void bsdsum_help (void)
 	"                 checksums in 'checklist'.\n"
 	"  [-o hashfile] place the checksum into this file\n"
 	"                instead of stdout.\n"
+	"  [-v level] messages filter:\n"
+	"             nothing: do not report anything\n"
+	"             errors: display errors only\n"
+	"             default: display errors and warnings\n"
+	"             verbose: default + additional messages\n"
+	"             debug: default + debug messages (if enabled)\n"
 	"  [file ...]\n");
 }
 

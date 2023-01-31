@@ -356,7 +356,7 @@ bsdsum_res_t bsdsum_digest_mem (bsdsum_op_t *hf,
 {
 	bsdsum_res_t res = RES_OK;
 
-	//printf("%i %p %li %i\n", getpid(), buf, length, split);
+	DBG("digest_mem: %i %p %zi %i\n", getpid(), buf, length, split);
 	if (split < 2) {
 		bsdsum_digest_init(hf, -1);
 		hf->update(hf->ctx, buf, length);
@@ -386,7 +386,7 @@ static bsdsum_res_t bsdsum_digest_reg (const char *file,
 	bsdsum_op_t *o;
 	off_t total;
 
-	//printf("%s %i %i\n", file, offset, length);
+	DBG("digest_reg: %s %zi %zi\n", file, offset, length);
 	if (stsrc)
 		pst = stsrc;
 	else if (stat(file, &st)) {

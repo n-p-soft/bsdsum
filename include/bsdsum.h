@@ -189,7 +189,7 @@ typedef struct {
 	bsdsum_dgl_par_t *par;
 	bsdsum_res_t res;
 	int error;
-	bsdsum_ll_t out_lvl;
+	bsdsum_ll_t log_lvl;
 } bsdsum_t;
 
 /* length in KB of buffer for stdin input */
