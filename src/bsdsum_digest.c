@@ -582,7 +582,7 @@ bsdsum_res_t bsdsum_digest_one (int ofile, bsdsum_op_t* ops,
 		}
 	}
 	else {
-		if (stat(file, &st)) {
+		if (lstat(file, &st)) {
 			bsdsum_log(LL_ERR, 
 				"unable to stat file %s\n", file);
 			return RES_ERROR;
@@ -605,7 +605,7 @@ bsdsum_res_t bsdsum_digest_one (int ofile, bsdsum_op_t* ops,
 			}
 		case S_IFLNK:
 			if (flags & FLAG_K)
-				return RES_OK;
+				return RES_SKIPPED;
 			else
 				return bsdsum_digest_lnk(ofile, ops, 
 							file, flags);

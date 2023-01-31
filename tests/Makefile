@@ -17,3 +17,7 @@ all:
 	@echo "* OFFSET"; A=$$(cat l1); \
 		B=$$($(PRG) -a sha1 -f 1 e); \
 		test "-$${A}-" = "-$${B}-" || exit 1
+	@echo "* LNKK"; A=$$(cat lnk2); \
+		B=$$($(PRG) -a md5 -k -r lnk); \
+		test "-$${A}-" = "-$${B}-" || exit 1
+

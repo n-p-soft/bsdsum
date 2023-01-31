@@ -8,6 +8,7 @@ see git log for more details.
 * add "mix32" (5-bit) encoding 
 * add "-r" option for recursive directory access
 * add "-k" option for skipping links
+* add "-v" option for message reporting settings
 * fix "-l" (length) and "-f" (offset) options
 * add large files support on Linux (32-bit or 64-bit)
 * add block devices support (only available if large files
