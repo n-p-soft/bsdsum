@@ -207,6 +207,7 @@ static bsdsum_res_t bsdsum_dgl_check_line(bsdsum_dgl_par_t *par,
 			par->l_error++;
 		}
 	}
+	return RES_CONTINUE;
 }
 
 typedef bsdsum_res_t (*bsdsum_dgl_cb_t) (bsdsum_dgl_par_t* par,
