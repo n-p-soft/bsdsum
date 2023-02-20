@@ -6,7 +6,7 @@ all:
 	@echo "* FILELIST1"; $(PRG) -v nothing -c sums || exit 1
 	@echo "* FILELIST2"; $(PRG) -v nothing -c sums0 || exit 1
 	@echo "* FILELIST3"; $(PRG) -v nothing -C sums a || exit 1
-	@echo "* SUBDIR"; $(PRG) -r sub > /tmp/bsdst; \
+	@echo "* SUBDIR"; $(PRG) -r sub | sort -o /tmp/bsdst; \
 		diff /tmp/bsdst sumsub || exit 1
 	@echo "* LENGTH0"; A=$$(cat z5); \
 		B=$$($(PRG) -a md5 -l 0 a); \
@@ -18,7 +18,7 @@ all:
 		B=$$($(PRG) -a sha1 -f 1 e); \
 		test "-$${A}-" = "-$${B}-" || exit 1
 	@echo "* LNKK"; A=$$(cat lnk2); \
-		B=$$($(PRG) -a md5 -k -r lnk); \
+		B=$$($(PRG) -a md5 -k -r lnk | sort); \
 		test "-$${A}-" = "-$${B}-" || exit 1
 	@echo "* CMDC2"; \
 		B=$$($(PRG) -v verbose -c sums sums0 1>/dev/null 2>/tmp/bsdst); \
