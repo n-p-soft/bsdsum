@@ -33,7 +33,7 @@ void explicit_bzero(void* p, size_t sz)
 	unsigned char* q = p;
 	size_t i;
 
-	if ( ! p)
+	if (q == NULL)
 		return;
 	for (i = 0; i < sz; i++)
 		*q++ = 0;
@@ -103,7 +103,7 @@ void bsdsum_log(bsdsum_ll_t lvl, const char *fmt, ...)
 	}
 	va_end(va);
 	if (bsdsum_log_fd > 0)
-		dprintf(bsdsum_log_fd, "%s", buf, strlen(buf));
+		dprintf(bsdsum_log_fd, "%s", buf);
 	if (lvl & LL_STDOUT)
 		fprintf(stdout, "%s", buf, strlen(buf));
 	else
